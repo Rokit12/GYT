@@ -88,13 +88,19 @@ KEYS_FILE = Path(__file__).resolve().parent.parent / "tracker_keys.json"
 def reset():
     with engine.begin() as c:
         c.exec_driver_sql(
-            "DROP TABLE IF EXISTS yacht_photos, valuations, follows, audit_log, chain_txs, bank_accounts, users, credit_spend, holdings, investors, bookings, anchors, events, positions, trackers, "
+            "DROP TABLE IF EXISTS schema_migrations, yacht_photos, valuations, follows, audit_log, chain_txs, bank_accounts, users, credit_spend, holdings, investors, bookings, anchors, events, positions, trackers, "
             "documents, compliance_config, yachts, berths, marinas CASCADE"
         )
 
 
 def main():
     if "--reset" in sys.argv:
+        import os
+        from .db import db_host
+        host = db_host(get_settings().database_url)
+        if host not in ("localhost", "127.0.0.1", "::1", "db", "") and os.environ.get("GYT_ALLOW_RESET") != "1":
+            raise SystemExit(f"Refusing to --reset the database at {host}: it would delete every table. "
+                             "Set GYT_ALLOW_RESET=1 if you really mean it.")
         reset()
     init_db()
     keys = json.loads(KEYS_FILE.read_text()) if KEYS_FILE.exists() else {}

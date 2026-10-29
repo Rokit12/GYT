@@ -55,8 +55,8 @@ forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --private-key $
 # api (needs PostgreSQL 16 with PostGIS 3)
 cd api && pip install -r requirements-dev.txt
 cp ../.env.example .env   # set DATABASE_URL
-python -m app.seed && uvicorn app.main:app --reload
-TEST_DATABASE_URL=postgresql+psycopg://... pytest       # 39 tests; resets that database
+python -m app.migrate && python -m app.seed && uvicorn app.main:app --reload
+TEST_DATABASE_URL=postgresql+psycopg://... pytest       # 58 tests; resets that database (local hosts only)
 
 # web
 cd web && npm install && npm test && API_URL=http://localhost:8000 JWT_SECRET=... npm run dev
@@ -90,6 +90,49 @@ force-transfer (court orders, lost wallets).
 
 **Double bookings** are impossible at the database level: a GiST exclusion constraint on
 `(berth_id, daterange(arrive, depart))`.
+
+## Hosting the database (always on, independent of the app)
+
+The database is its own service. The API only connects to `DATABASE_URL`; it never creates, resets or
+owns the data, and it keeps no state of its own (photos are stored in the database too). You can
+redeploy, scale or replace the API and web containers, or this development environment can stop,
+without touching the data.
+
+**Pick a host that never pauses** (PostgreSQL 15+ with PostGIS):
+
+| Host | Pauses? | Notes |
+| --- | --- | --- |
+| Supabase **Pro** | Never ("paid plans cannot be paused") | PostGIS built in. The Free plan pauses after 7 days of low activity, so do not use it for production. |
+| Neon **paid plan** | Only if scale-to-zero is on; turn it **off** | The Free plan always suspends after 5 minutes idle (wakes on the next query). |
+| AWS RDS / Google Cloud SQL / Railway / your own server | Always on | Enable the `postgis`, `citext` and `btree_gist` extensions. |
+
+**Set it up once:**
+
+```bash
+# 1. Create the project on your host, copy its connection string into .env
+DATABASE_URL=postgresql://...?sslmode=require        # postgres:// and postgresql:// are both fine
+# 2. Create the schema (versioned; safe to re-run; recorded in schema_migrations)
+docker compose -f docker-compose.hosted.yml run --rm migrate          # or: cd api && python -m app.migrate
+# 3. First admin (ADMIN_EMAIL / ADMIN_PASSWORD in .env) and the sample fleet
+docker compose -f docker-compose.hosted.yml run --rm api python -m app.seed
+# 4. Run the app against it
+docker compose -f docker-compose.hosted.yml up -d --build
+```
+
+**What the code does for hosted databases**
+
+- `python -m app.migrate` applies each file in `api/sql/` once, in a transaction, under an advisory
+  lock (safe with several API replicas). `python -m app.migrate status` lists applied and pending
+  migrations; editing an already-applied file is flagged, so add a new numbered file instead.
+- The API waits for the database at startup (up to `DB_WAIT_SECONDS`, with backoff) and refuses to
+  start on an out-of-date schema unless `AUTO_MIGRATE=true`.
+- Connections are checked before use and recycled, so restarts and dropped idle connections recover
+  on their own. Transaction poolers (Supabase port 6543, PgBouncer) are detected and prepared
+  statements are turned off for them.
+- `python -m app.seed --reset` refuses to run against any non-local database unless `GYT_ALLOW_RESET=1`.
+- `GET /health` reports database reachability and pending migrations, ready for an uptime monitor.
+- `scripts/db-backup.sh` writes a `pg_dump` of the database to `backups/`; `scripts/db-restore.sh`
+  restores it (for example, to move hosts). Keep these in addition to your host's own backups.
 
 ## Client accounts
 

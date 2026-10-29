@@ -7,7 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .chain import ChainClient
 from .config import get_settings
-from .db import SessionLocal, init_db
+from .db import SessionLocal, engine, wait_for_db
+from .migrate import status as migration_status, upgrade as migrate_upgrade
 from .events import anchor_pending
 from . import live
 from .account import router as account_router
@@ -45,8 +46,17 @@ async def _digitraffic():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
     s = get_settings()
+    # The database lives on its own (local container or an always-on host). Wait for it, then make
+    # sure its schema is current: apply migrations only when AUTO_MIGRATE is set, otherwise refuse
+    # to run against an out-of-date schema.
+    await asyncio.to_thread(wait_for_db)
+    if s.auto_migrate:
+        await asyncio.to_thread(migrate_upgrade)
+    else:
+        pending = (await asyncio.to_thread(migration_status))["pending"]
+        if pending:
+            raise RuntimeError(f"Database schema is behind ({', '.join(pending)} pending). Run: python -m app.migrate")
     tasks = []
     if s.anchor_interval_seconds > 0:
         tasks.append(asyncio.create_task(anchor_loop(s.anchor_interval_seconds)))
@@ -75,4 +85,13 @@ app.include_router(router)
 
 @app.get("/health")
 def health():
-    return {"ok": True, "chain": ChainClient().enabled}
+    """Liveness plus database reachability and schema state, for uptime monitors."""
+    from sqlalchemy import text as _t
+    try:
+        with engine.connect() as c:
+            c.execute(_t("SELECT 1"))
+        st = migration_status()
+        db = {"ok": True, "pending_migrations": st["pending"], "applied": len(st["applied"])}
+    except Exception as e:  # noqa: BLE001
+        db = {"ok": False, "error": str(e).splitlines()[0][:200]}
+    return {"ok": db["ok"], "database": db, "chain": ChainClient().enabled}
