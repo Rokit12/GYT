@@ -1,6 +1,11 @@
 import Link from "next/link";
-import { api, usd, type Yacht } from "@/lib/api";
+import { api, type Yacht } from "@/lib/api";
 import HashCheck from "@/components/HashCheck";
+import HeroVideo from "@/components/HeroVideo";
+import HashTicker from "@/components/HashTicker";
+import LiveMap from "@/components/LiveMap";
+import YachtCard from "@/components/YachtCard";
+import { CountUp, KineticHeadline } from "@/components/Kinetic";
 import { getSession } from "@/lib/server-session";
 
 export const dynamic = "force-dynamic";
@@ -12,23 +17,28 @@ const STEPS = [
   ["Settle", "Berth and charter payments wait in escrow and release only when the yacht's arrival is proven."],
 ];
 
+type Recent = { leaf: string; event_type: string; yacht_id: string; anchor_id: number };
+
 export default async function Home({ searchParams }: { searchParams: { denied?: string } }) {
-  const [yachts, marinas, user] = await Promise.all([
+  const [yachts, marinas, recent, user] = await Promise.all([
     api<Yacht[]>("/yachts").catch(() => [] as Yacht[]),
     api<{ id: string }[]>("/marinas").catch(() => []),
+    api<Recent[]>("/proofs/recent?limit=14").catch(() => [] as Recent[]),
     getSession(),
   ]);
   const featured = yachts.filter((y) => y.insurance_verified).slice(0, 3);
+  const units = yachts.filter((y) => y.tokenized).length;
   return (
     <main className="home">
       {searchParams.denied && (
         <div className="wrap"><p className="banner warn">That area is for administrators. Sign in with an admin account to open it.</p></div>
       )}
-      <section className="hero">
-        <div className="wrap hero-grid">
+      <section className="hero hero-full">
+        <HeroVideo />
+        <div className="wrap hero-grid hero-inner">
           <div>
             <div className="eyebrow">Verified · Tracked · Proven</div>
-            <h1 className="display">Know where a yacht is, and prove it.</h1>
+            <KineticHeadline className="display" text="Know where a yacht is, and prove it." />
             <p className="lede">
               GYT gives every yacht a verified passport, follows it with three independent tracking signals, and records every
               event as a hash anyone can check.
@@ -38,18 +48,34 @@ export default async function Home({ searchParams }: { searchParams: { denied?: 
               <Link className="btn lg" href={user ? "/track" : "/signup"}>{user ? "Track a yacht" : "Create a free account"}</Link>
             </div>
             <div className="stats">
-              <div><b>{yachts.length}</b><span>verified yachts</span></div>
-              <div><b>{marinas.length}</b><span>partner marinas</span></div>
+              <div><b><CountUp value={yachts.length} /></b><span>verified yachts</span></div>
+              <div><b><CountUp value={marinas.length} /></b><span>partner marinas</span></div>
+              <div><b><CountUp value={units} /></b><span>offering units</span></div>
               <div><b>3</b><span>signals per position</span></div>
             </div>
           </div>
-          <div className="panel verify-card">
+          <div className="panel verify-card glass">
             <div className="eyebrow">Try it</div>
             <h2>Verify any record</h2>
             <p className="small muted">Paste a hash from any yacht's timeline. Your browser does the maths; you don't have to trust us.</p>
             <HashCheck compact />
           </div>
         </div>
+        <a className="hero-scroll" href="#live" aria-label="Scroll to the live map">↓</a>
+      </section>
+
+      <HashTicker initial={recent} />
+
+      <section className="wrap band" id="live">
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
+          <div>
+            <div className="eyebrow">Live now</div>
+            <h2>Yachts on the water</h2>
+            <p className="small muted">GYT yachts from signed GPS and AIS, plus pleasure craft heard on free public AIS. Click a yacht to follow it.</p>
+          </div>
+          <Link href="/track">Open full tracker →</Link>
+        </div>
+        <LiveMap height={520} />
       </section>
 
       <section className="wrap band">
@@ -57,7 +83,9 @@ export default async function Home({ searchParams }: { searchParams: { denied?: 
         <h2>From paperwork to proof</h2>
         <ol className="steps4">
           {STEPS.map(([t, d], i) => (
-            <li key={t}><span className="num">{i + 1}</span><b>{t}</b><p className="small muted">{d}</p></li>
+            <li key={t} className="reveal" style={{ ["--d" as string]: `${i * 90}ms` }}>
+              <span className="num">{String(i + 1).padStart(2, "0")}</span><b>{t}</b><p className="small muted">{d}</p>
+            </li>
           ))}
         </ol>
       </section>
@@ -67,16 +95,8 @@ export default async function Home({ searchParams }: { searchParams: { denied?: 
           <div><div className="eyebrow">Featured</div><h2>Verified yachts</h2></div>
           <Link href="/yachts">See all {yachts.length} →</Link>
         </div>
-        <div className="fleet">
-          {featured.map((y) => (
-            <Link key={y.id} href={`/yachts/${y.id}`} className="yc">
-              <span className="yc-hull" aria-hidden="true" />
-              <span className="eyebrow">{y.id}</span>
-              <b>{y.name}</b>
-              <span className="small muted">{Number(y.loa_m)} m · {y.marina_name}</span>
-              <span className="row small"><span className="pill ok">Verified</span>{y.charter_week_usd && <span>{usd(y.charter_week_usd)} / week</span>}</span>
-            </Link>
-          ))}
+        <div className="cards2">
+          {featured.map((y) => <YachtCard key={y.id} y={y} />)}
         </div>
       </section>
 

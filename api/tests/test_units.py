@@ -123,3 +123,142 @@ def test_condition_score():
     score, factors = policy.condition_score("PENDING", False, 2, 2014, 3, 2026)
     assert score == 100 - 15 - 20 - 6 - 4 + 3
     assert ("Insurance not verified", -20) in factors
+
+
+# ---------------------------------------------------------------- live AIS (aisstream.io message shapes)
+
+def _pos(mmsi, lat, lon, mtype="PositionReport", name="", sog=7.4, cog=91.0, hdg=90):
+    return {"MessageType": mtype,
+            "MetaData": {"MMSI": int(mmsi), "ShipName": name, "latitude": lat, "longitude": lon,
+                         "time_utc": "2026-10-29 01:02:03.123456789 +0000 UTC"},
+            "Message": {mtype: {"UserID": int(mmsi), "Latitude": lat, "Longitude": lon, "Sog": sog, "Cog": cog,
+                                "TrueHeading": hdg, "Valid": True}}}
+
+
+def test_live_parses_positions_and_static_types():
+    from app.live import LiveAIS
+
+    L = LiveAIS()
+    L.handle(_pos("319001234", 25.09, 55.14, name="AZURE MERIDIAN   "))
+    L.handle({"MessageType": "ShipStaticData", "MetaData": {"MMSI": 319001234, "latitude": 25.09, "longitude": 55.14},
+              "Message": {"ShipStaticData": {"UserID": 319001234, "Name": "AZURE MERIDIAN", "Type": 37,
+                                             "Dimension": {"A": 30, "B": 5, "C": 4, "D": 4}, "Valid": True}}})
+    v = L.vessels["319001234"]
+    assert (v.name, v.ship_type, v.length_m, v.kind) == ("AZURE MERIDIAN", 37, 35, "yacht")
+    # class B position + StaticDataReport part B gives the type for small yachts
+    L.handle(_pos("247000001", 43.73, 7.42, mtype="StandardClassBPositionReport"))
+    L.handle({"MessageType": "StaticDataReport", "MetaData": {"MMSI": 247000001},
+              "Message": {"StaticDataReport": {"UserID": 247000001, "PartNumber": True, "ReportA": {"Valid": False},
+                                               "ReportB": {"Valid": True, "ShipType": 36, "Dimension": {"A": 12, "B": 3}}}}})
+    assert L.vessels["247000001"].kind == "yacht"
+    # a cargo ship stays out of the yachts layer but is in 'all'
+    L.handle(_pos("636015988", 25.2, 55.2))
+    assert {f["properties"]["mmsi"] for f in L.snapshot(kind="yachts")["features"]} == {"319001234", "247000001"}
+    assert len(L.snapshot(kind="all")["features"]) == 3
+    assert [f["properties"]["mmsi"] for f in L.snapshot((7, 43, 8, 44), "all")["features"]] == ["247000001"]
+
+
+def test_live_rejects_unavailable_values_and_queues_fleet():
+    from app.live import LiveAIS
+
+    L = LiveAIS()
+    assert L.handle(_pos("111111111", 91, 181)) is None  # AIS "not available"
+    L.fleet = {"470118320": "YACHT-000007"}
+    v = L.handle(_pos("470118320", 25.09, 55.14, sog=102.3, cog=360, hdg=511))
+    assert (v.sog, v.cog, v.heading, v.kind) == (None, None, None, "fleet")
+    L.handle(_pos("470118320", 25.10, 55.15))  # within a minute: not stored again
+    assert len(L.pending_positions) == 1 and L.pending_positions[0][0] == "YACHT-000007"
+    assert L.pending_positions[0][1].isoformat().startswith("2026-10-29T01:02:03.123456")
+
+
+def test_live_subscriptions():
+    from app.live import subscriptions
+
+    subs = subscriptions("k", [(25.09, 55.14)], [str(i) for i in range(60)], 0.5)
+    assert subs[0]["BoundingBoxes"] == [[[24.59, 54.64], [25.59, 55.64]]]
+    assert [len(s.get("FiltersShipMMSI", [])) for s in subs] == [0, 50, 10]
+    assert all(s["APIKey"] == "k" for s in subs)
+
+
+def _dt_feature(mmsi, lon, lat, ts_ms, sog=6.2, cog=181.4, heading=180):
+    return {"mmsi": mmsi, "type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]},
+            "properties": {"mmsi": mmsi, "sog": sog, "cog": cog, "navStat": 0, "rot": 0, "posAcc": True, "raim": False,
+                           "heading": heading, "timestamp": 30, "timestampExternal": ts_ms}}
+
+
+def test_digitraffic_locations_and_metadata():
+    import time as _t
+
+    from app.live import LiveAIS
+
+    L = LiveAIS()
+    now = int(_t.time() * 1000)
+    L.handle_digitraffic_vessel({"mmsi": 230111222, "name": "AALTO ", "shipType": 37, "referencePointA": 9, "referencePointB": 5})
+    L.handle_digitraffic_vessel({"mmsi": 230999000, "name": "CARGO ONE", "shipType": 70, "referencePointA": 120, "referencePointB": 30})
+    n = L.apply_digitraffic({"type": "FeatureCollection", "features": [
+        _dt_feature(230111222, 24.95, 60.16, now),
+        _dt_feature(230999000, 22.2, 60.4, now, sog=102.3, cog=360, heading=511),
+        _dt_feature(230555000, 181, 91, now),  # not available
+    ]})
+    assert n == 2
+    y = L.vessels["230111222"]
+    assert (y.name, y.ship_type, y.length_m, y.kind, y.sog) == ("AALTO", 37, 14, "yacht", 6.2)
+    c = L.vessels["230999000"]
+    assert (c.kind, c.sog, c.cog, c.heading) == ("vessel", None, None, None)
+    # an older fix never moves a vessel backwards
+    L.apply_digitraffic({"features": [_dt_feature(230111222, 25.5, 60.0, now - 60_000)]})
+    assert L.vessels["230111222"].lon == 24.95
+    snap = L.snapshot(kind="yachts")
+    assert [f["properties"]["mmsi"] for f in snap["features"]] == ["230111222"]
+
+
+def test_digitraffic_fleet_positions_are_queued_with_provider():
+    import time as _t
+
+    from app.live import LiveAIS
+
+    L = LiveAIS()
+    L.fleet = {"230111222": "YACHT-000004"}
+    L.apply_digitraffic({"features": [_dt_feature(230111222, 24.95, 60.16, int(_t.time() * 1000))]})
+    assert len(L.pending_positions) == 1
+    yid, ts, lat, lon, sog, cog, provider = L.pending_positions[0]
+    assert (yid, lat, lon, provider) == ("YACHT-000004", 60.16, 24.95, "digitraffic")
+
+
+def test_run_digitraffic_polls_with_user_header():
+    import asyncio
+
+    import httpx
+
+    from app import live as live_mod
+    from app.config import get_settings
+
+    get_settings().digitraffic_enabled = True  # the suite turns the real poller off
+    seen = []
+
+    def respond(req: httpx.Request):
+        seen.append((req.url.path, req.headers.get("Digitraffic-User")))
+        if req.url.path.endswith("/vessels"):
+            return httpx.Response(200, json=[{"mmsi": 230222333, "name": "SAILOR", "shipType": 36, "referencePointA": 8, "referencePointB": 4}])
+        import time as _t
+        return httpx.Response(200, json={"type": "FeatureCollection", "features": [_dt_feature(230222333, 21.0, 59.9, int(_t.time() * 1000))]})
+
+    async def go():
+        stop = asyncio.Event()
+        client = httpx.AsyncClient(base_url="https://meri.digitraffic.fi", transport=httpx.MockTransport(respond),
+                                   headers={"Digitraffic-User": "GYT/test"})
+        task = asyncio.create_task(live_mod.run_digitraffic(lambda: None, stop, client=client))
+        for _ in range(50):
+            await asyncio.sleep(0.02)
+            if live_mod.live.dt_status == "live":
+                break
+        state = live_mod.live.state()
+        stop.set()
+        await task
+        await client.aclose()
+        return state
+
+    state = asyncio.run(go())
+    assert seen[0] == ("/api/ais/v1/vessels", "GYT/test") and seen[1][0] == "/api/ais/v1/locations"
+    assert live_mod.live.vessels["230222333"].name == "SAILOR"
+    assert state["digitraffic"] == "live" and state["status"] == "live"

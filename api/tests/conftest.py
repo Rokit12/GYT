@@ -10,6 +10,7 @@ pytestmark = pytest.mark.skipif(not DB, reason="TEST_DATABASE_URL not set")
 if DB:
     os.environ["DATABASE_URL"] = DB
     os.environ["ANCHOR_INTERVAL_SECONDS"] = "0"
+    os.environ["DIGITRAFFIC_ENABLED"] = "false"
     os.environ["ADMIN_TOKEN"] = "test-admin"
     os.environ["JWT_SECRET"] = "test-secret-" + "x" * 40
     os.environ["ADMIN_EMAIL"] = "admin@gyt.com"

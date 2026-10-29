@@ -45,6 +45,16 @@ class Settings(BaseSettings):
     osiris_endpoint: str | None = None  # CNR-ISTI OSIRIS deployment, via research partnership
     kyc_provider_key: str | None = None
 
+    # Live AIS for the maps: aisstream.io (free key at https://aisstream.io/authenticate)
+    aisstream_api_key: str | None = None
+    aisstream_url: str = "wss://stream.aisstream.io/v0/stream"
+    live_box_deg: float = 0.5  # half-size of the box watched around each partner marina
+    # Digitraffic (Finland): open AIS, no key, CC BY 4.0. Set DIGITRAFFIC_ENABLED=false to turn off.
+    digitraffic_enabled: bool = True
+    digitraffic_url: str = "https://meri.digitraffic.fi"
+    digitraffic_user: str = "GYT/0.3"
+    digitraffic_poll_seconds: int = 30
+
 
 @lru_cache
 def get_settings() -> Settings:

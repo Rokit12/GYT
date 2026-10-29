@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { api, usd, type Passport } from "@/lib/api";
 import VerifyProof from "@/components/VerifyProof";
+import Gallery from "@/components/Gallery";
+import LiveMap from "@/components/LiveMap";
 
 export const dynamic = "force-dynamic";
 
@@ -35,11 +37,18 @@ export default async function PassportPage({ params }: { params: { id: string } 
         </div>
         <Link className="btn primary" href={`/track?yacht=${y.id}`}>Track this yacht</Link>
       </div>
+      <Gallery id={y.id} name={y.name} />
       <div className="grid g2">
-        <div className="panel">
-          {rows.map(([k, v]) => (
-            <div className="kv" key={k}><span>{k}</span><span>{v}</span></div>
-          ))}
+        <div className="grid" style={{ alignContent: "start" }}>
+          <div className="panel">
+            {rows.map(([k, v]) => (
+              <div className="kv" key={k}><span>{k}</span><span>{v}</span></div>
+            ))}
+          </div>
+          <div className="panel">
+            <header><h3>Where it is now</h3><span className="small muted">Live · signed GPS and AIS</span></header>
+            <LiveMap height={320} focus={y.id} showTraffic={false} />
+          </div>
         </div>
         <div className="grid">
           <div className="score">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { call } from "@/lib/api";
 import { computeRoot } from "@/lib/merkle";
 
@@ -10,7 +10,7 @@ type Proof = {
 };
 
 // Paste any GYT event hash; the browser recomputes the Merkle path and compares it to the anchored root.
-export default function HashCheck({ initial = "", compact = false }: { initial?: string; compact?: boolean }) {
+export default function HashCheck({ initial = "", compact = false, autoVerify = false }: { initial?: string; compact?: boolean; autoVerify?: boolean }) {
   const [hash, setHash] = useState(initial);
   const [res, setRes] = useState<{ p?: Proof; ok?: boolean; err?: string; busy?: boolean }>({});
 
@@ -26,6 +26,11 @@ export default function HashCheck({ initial = "", compact = false }: { initial?:
       setRes({ err: (err as Error).message });
     }
   }
+
+  useEffect(() => {
+    if (autoVerify && initial) check();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className={`hashcheck ${compact ? "compact" : ""}`}>
