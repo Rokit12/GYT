@@ -1,0 +1,38 @@
+{
+ "version": 8,
+ "name": "GYT offline basemap",
+ "sources": {
+  "land": {
+   "type": "geojson",
+   "data": "/map/land.json",
+   "attribution": "Natural Earth"
+  }
+ },
+ "layers": [
+  {
+   "id": "sea",
+   "type": "background",
+   "paint": {
+    "background-color": "#cfe0e6"
+   }
+  },
+  {
+   "id": "land",
+   "type": "fill",
+   "source": "land",
+   "paint": {
+    "fill-color": "#e9ece6",
+    "fill-outline-color": "#9fb3ba"
+   }
+  },
+  {
+   "id": "coast",
+   "type": "line",
+   "source": "land",
+   "paint": {
+    "line-color": "#8ea6ae",
+    "line-width": 0.6
+   }
+  }
+ ]
+}

@@ -455,6 +455,17 @@ def anchors(limit: int = Query(20, le=200), db: Session = Depends(get_db)):
     return [dict(r) for r in db.execute(text("SELECT * FROM anchors ORDER BY id DESC LIMIT :n"), {"n": limit}).mappings()]
 
 
+@router.get("/proofs/recent")
+def recent_proofs(limit: int = Query(12, ge=1, le=50), db: Session = Depends(get_db)):
+    """Public: the newest anchored record hashes, for the home page ticker."""
+    rows = db.execute(
+        text("""SELECT e.leaf, e.event_type, e.yacht_id, e.observed_at, a.id AS anchor_id, a.chain_tx
+                FROM events e JOIN anchors a ON a.id = e.anchor_id ORDER BY e.id DESC LIMIT :n"""),
+        {"n": limit},
+    ).mappings().all()
+    return [dict(r) for r in rows]
+
+
 @router.get("/proofs/{event_id}")
 def get_proof(event_id: int, db: Session = Depends(get_db)):
     return row_or_404(proof_for_event(db, event_id), "Event")
@@ -593,3 +604,74 @@ def book_credit_stay(investor_id: str, body: CreditStayIn, db: Session = Depends
     record_event(db, y.id, "CREDIT_STAY_RESERVE", marina_id=y.home_marina_id, document_hash=body.ref)
     db.commit()
     return {"ref": body.ref, "credits_usd": cost, "status": "escrowed"}
+
+
+# ------------------------------------------------------------------ live maps
+
+
+def _bbox(bbox: str | None):
+    if not bbox:
+        return None
+    try:
+        b = tuple(float(x) for x in bbox.split(","))
+    except ValueError:
+        raise HTTPException(422, "bbox is minLon,minLat,maxLon,maxLat")
+    if len(b) != 4 or not (-180 <= b[0] <= 180 and -90 <= b[1] <= 90 and -180 <= b[2] <= 180 and -90 <= b[3] <= 90):
+        raise HTTPException(422, "bbox is minLon,minLat,maxLon,maxLat")
+    return b
+
+
+@router.get("/live/status")
+def live_status():
+    from .live import live
+
+    return live.state()
+
+
+@router.get("/live/vessels")
+def live_vessels(bbox: str | None = None, kind: str = Query("yachts", pattern="^(yachts|all|fleet)$")):
+    """Public AIS traffic heard by the live feed (aisstream.io), as GeoJSON."""
+    from .live import live
+
+    return live.snapshot(_bbox(bbox), kind)
+
+
+@router.get("/live/fleet")
+def live_fleet(trail_minutes: int = Query(120, ge=0, le=24 * 60), db: Session = Depends(get_db)):
+    """Latest position of every minted yacht (signed GPS first, then AIS), with a short trail."""
+    rows = db.execute(
+        text(
+            """SELECT y.id, y.name, y.mmsi, y.loa_m, y.insurance_verified, m.name AS home,
+                      p.source, p.observed_at, ST_Y(p.location::geometry) lat, ST_X(p.location::geometry) lon, p.sog_kn, p.cog_deg,
+                      (SELECT ST_AsGeoJSON(ST_MakeLine(q.location::geometry ORDER BY q.observed_at))::json FROM positions q
+                        WHERE q.yacht_id = y.id AND q.source = p.source
+                          AND q.observed_at > p.observed_at - make_interval(mins => :tm)) AS trail
+               FROM yachts y
+               JOIN marinas m ON m.id = y.home_marina_id
+               JOIN LATERAL (SELECT * FROM positions WHERE yacht_id = y.id AND source IN ('gps','ais')
+                             ORDER BY (source = 'gps') DESC, observed_at DESC LIMIT 1) p ON TRUE
+               WHERE y.twin_status = 'minted' AND y.retired_at IS NULL"""
+        ),
+        {"tm": trail_minutes},
+    ).mappings().all()
+    now = datetime.now(timezone.utc)
+    feats = []
+    for r in rows:
+        trail = r["trail"] if r["trail"] and r["trail"].get("type") == "LineString" else None
+        cog = r["cog_deg"]
+        if cog is None and trail and len(trail["coordinates"]) >= 2:
+            (x1, y1), (x2, y2) = trail["coordinates"][-2], trail["coordinates"][-1]
+            import math
+
+            cog = (math.degrees(math.atan2((x2 - x1) * math.cos(math.radians(y2)), y2 - y1)) + 360) % 360
+        feats.append({
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [r["lon"], r["lat"]]},
+            "properties": {
+                "id": r["id"], "name": r["name"], "mmsi": r["mmsi"], "loa_m": float(r["loa_m"]), "home": r["home"],
+                "source": r["source"], "observed_at": r["observed_at"].isoformat(),
+                "age_s": round((now - r["observed_at"]).total_seconds()), "sog": r["sog_kn"], "cog": cog,
+                "insured": r["insurance_verified"], "trail": trail["coordinates"] if trail and trail_minutes else None,
+            },
+        })
+    return {"type": "FeatureCollection", "features": feats}

@@ -1,14 +1,17 @@
-import Link from "next/link";
-import { api, usd, type Yacht } from "@/lib/api";
+import { api, type Yacht } from "@/lib/api";
+import YachtCard from "@/components/YachtCard";
+import LiveMap from "@/components/LiveMap";
 
 export const dynamic = "force-dynamic";
 
-export default async function Yachts({ searchParams }: { searchParams: { q?: string; units?: string } }) {
+export default async function Yachts({ searchParams }: { searchParams: { q?: string; units?: string; view?: string } }) {
   const all = await api<Yacht[]>("/yachts");
   const q = (searchParams.q ?? "").toLowerCase();
+  const map = searchParams.view === "map";
   const list = all.filter(
     (y) => (!q || `${y.name} ${y.id} ${y.marina_name} ${y.flag}`.toLowerCase().includes(q)) && (searchParams.units !== "1" || y.tokenized),
   );
+  const qs = (v: string) => `?${new URLSearchParams({ ...(searchParams.q ? { q: searchParams.q } : {}), ...(searchParams.units ? { units: "1" } : {}), view: v })}`;
   return (
     <main className="wrap page">
       <div>
@@ -20,28 +23,17 @@ export default async function Yachts({ searchParams }: { searchParams: { q?: str
         <label className="sr" htmlFor="q">Search</label>
         <input id="q" name="q" defaultValue={searchParams.q} placeholder="Search by name, marina or flag" />
         <label className="row small"><input type="checkbox" name="units" value="1" defaultChecked={searchParams.units === "1"} style={{ width: "auto" }} /> Offers units</label>
+        {map && <input type="hidden" name="view" value="map" />}
         <button>Filter</button>
+        <span className="seg" role="group" aria-label="View" style={{ marginLeft: "auto" }}>
+          <a className="segl" aria-current={!map ? "true" : undefined} href={qs("grid")}>Gallery</a>
+          <a className="segl" aria-current={map ? "true" : undefined} href={qs("map")}>Live map</a>
+        </span>
       </form>
       <p className="small muted">{list.length} of {all.length} yachts</p>
-      <div className="fleet">
-        {list.map((y) => (
-          <div key={y.id} className="yc">
-            <span className="yc-hull" aria-hidden="true" />
-            <span className="eyebrow">{y.id}</span>
-            <b>{y.name}</b>
-            <span className="small muted">{Number(y.loa_m)} m · {y.flag} · {y.marina_name}</span>
-            <span className="row">
-              <span className="pill ok">Verified</span>
-              {y.tokenized && <span className="pill">Units</span>}
-              {!y.insurance_verified && <span className="pill crit">Insurance pending</span>}
-            </span>
-            <span className="small">{usd(y.charter_week_usd)} / week charter</span>
-            <span className="row">
-              <Link className="btn" href={`/yachts/${y.id}`}>Passport</Link>
-              <Link className="btn primary" href={`/track?yacht=${y.id}`}>Track</Link>
-            </span>
-          </div>
-        ))}
+      {map && <LiveMap height="min(68vh, 640px)" />}
+      <div className="cards2">
+        {list.map((y) => <YachtCard key={y.id} y={y} />)}
       </div>
     </main>
   );

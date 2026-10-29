@@ -91,6 +91,32 @@ force-transfer (court orders, lost wallets).
 **Double bookings** are impossible at the database level: a GiST exclusion constraint on
 `(berth_id, daterange(arrive, depart))`.
 
+## Live maps
+
+The home page, the yacht gallery (`/yachts?view=map`), every passport and the tracker use one MapLibre map
+(`web/components/LiveMap.tsx`). Everything on it is free:
+
+| Layer | Source | Key? |
+| --- | --- | --- |
+| Basemap | [OpenFreeMap](https://openfreemap.org) vector tiles (© OpenMapTiles, © OpenStreetMap contributors). Falls back to a bundled Natural Earth coastline if the tile host is unreachable | No |
+| GYT fleet | `/live/fleet`: newest signed GPS or AIS fix per minted yacht, plus a 3-hour trail. Markers glide between fixes | No |
+| Public yachts | `/live/vessels`: AIS ship types 36 (sailing) and 37 (pleasure craft) | see below |
+| ↳ Digitraffic | Fintraffic's open AIS API, polled every 30 s. No key; CC BY 4.0; covers the Baltic around Finland. On by default | No |
+| ↳ aisstream.io | Worldwide websocket feed, subscribed around every partner marina and to our fleet's MMSIs | Free key in `AISSTREAM_API_KEY` |
+
+Fleet yachts heard on either feed are also stored as `ais` positions, so fusion and admin monitoring
+see them. AIS keys stay on the server; the browser only talks to the GYT API. Swap the basemap with
+`NEXT_PUBLIC_MAP_STYLE` / `NEXT_PUBLIC_MAP_STYLE_DARK` (these are read at build time).
+
+## Hero video and imagery
+
+`web/public/media/hero-yacht.mp4` (12 s seamless loop, 1280×720, H.264, 1.8 MB) and the yacht photos in
+`web/public/media/yachts/` are original 3D renders made for GYT (three.js), so there are no licence
+terms to track. They are illustrations, labelled as such in the gallery. Set `NEXT_PUBLIC_HERO_VIDEO_URL`
+to use a licensed clip instead. The video pauses off screen, has a pause button, and stays on its poster
+for visitors who ask for reduced motion. Headlines use Big Shoulders Display as a variable font: letters
+thicken toward the pointer.
+
 ## Live data
 
 | Feed | Adapter | Env var | Status |
