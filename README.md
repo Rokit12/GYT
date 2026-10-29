@@ -91,6 +91,17 @@ force-transfer (court orders, lost wallets).
 **Double bookings** are impossible at the database level: a GiST exclusion constraint on
 `(berth_id, daterange(arrive, depart))`.
 
+## Site navigation
+
+The header uses the GYT mark (`web/components/Logo.tsx`; also `web/public/favicon.svg`): a yacht on moving water
+inside a brass compass ring, with a block node at north. Its waves drift and the ring turns on hover.
+`MainNav.tsx` gives a hover pill and an ink line under the current page, a **Platform** mega menu (Track & verify,
+Verify a record, Use or Earn, List your yacht), and on phones a slide-in drawer with a morphing menu button. Esc
+closes menus, and every animation respects reduced motion.
+
+Client pages: `/how-it-works` (paths for guests, investors, owners and marinas, the three-signal pipeline and FAQ)
+and `/about` (mission, principles, data sources and roadmap).
+
 ## Live maps
 
 The home page, the yacht gallery (`/yachts?view=map`), every passport and the tracker use one MapLibre map
