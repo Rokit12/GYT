@@ -1,0 +1,57 @@
+# Local stack: PostGIS, a local EVM chain, contract deployment, API and web.
+#   cp .env.example .env && docker compose up --build
+#   then: docker compose exec api python -m app.seed && ./scripts/demo.sh
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: gyt
+      POSTGRES_PASSWORD: gyt
+      POSTGRES_DB: gyt
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gyt"]
+      interval: 5s
+      retries: 10
+
+  chain:
+    image: ghcr.io/foundry-rs/foundry:stable
+    entrypoint: ["anvil", "--host", "0.0.0.0", "--chain-id", "31337"]
+    ports: ["8545:8545"]
+
+  deploy:
+    image: ghcr.io/foundry-rs/foundry:stable
+    depends_on: [chain]
+    working_dir: /contracts
+    volumes: [./contracts:/contracts]
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        sleep 2 &&
+        forge script script/Deploy.s.sol --rpc-url http://chain:8545
+        --private-key ${DEPLOYER_KEY} --broadcast
+    restart: "no"
+
+  api:
+    build: ./api
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://gyt:gyt@db:5432/gyt
+      CHAIN_RPC: http://chain:8545
+    depends_on:
+      db: { condition: service_healthy }
+      deploy: { condition: service_completed_successfully }
+    ports: ["8000:8000"]
+
+  web:
+    build: ./web
+    environment:
+      API_URL: http://api:8000
+      JWT_SECRET: ${JWT_SECRET}
+      INSECURE_COOKIES: "1"   # local http only; remove behind HTTPS
+    depends_on: [api]
+    ports: ["3000:3000"]
+
+volumes:
+  pgdata:
