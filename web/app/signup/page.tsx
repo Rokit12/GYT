@@ -1,6 +1,8 @@
 import { Suspense } from "react";
-import AuthForm from "@/components/AuthForm";
+import SignupWizard from "@/components/SignupWizard";
+
+export const metadata = { title: "GYT · Create your account" };
 
 export default function SignUp() {
-  return <Suspense><AuthForm mode="signup" /></Suspense>;
+  return <Suspense><SignupWizard /></Suspense>;
 }

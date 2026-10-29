@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime, timedelta, timezone
 import sys
 from pathlib import Path
 
@@ -72,7 +73,13 @@ INVESTORS = [
     ("INV-1046", "Northline Trading Ltd", "entity", 0, False, "pending", "sanctions_hit"),
 ]
 HOLDINGS = [("INV-1043", "YACHT-000001", 400, "use"), ("INV-1043", "YACHT-000003", 300, "earn"),
-            ("INV-1043", "YACHT-000005", 250, "use"), ("INV-1043", "YACHT-000007", 120, "earn")]
+            ("INV-1043", "YACHT-000005", 250, "use"), ("INV-1043", "YACHT-000007", 120, "earn"),
+            ("INV-1045", "YACHT-000001", 2600, "earn"), ("INV-1045", "YACHT-000002", 6400, "earn"),
+            ("INV-1045", "YACHT-000007", 4100, "use"), ("INV-1041", "YACHT-000002", 3800, "use"),
+            ("INV-1041", "YACHT-000005", 1500, "earn"), ("INV-1042", "YACHT-000003", 140, "use"),
+            ("INV-1042", "YACHT-000001", 90, "earn")]
+# Quarterly valuation multipliers, oldest first; the last one equals today's valuation.
+VALUATION_PATH = [0.9, 0.92, 0.915, 0.94, 0.955, 0.97, 0.985, 1.0]
 ALLOWED = [784, 404, 578, 250, 840, 380, 470, 702]  # UAE, Kenya, Norway, France, US, Italy, Malta, Singapore
 
 KEYS_FILE = Path(__file__).resolve().parent.parent / "tracker_keys.json"
@@ -81,7 +88,7 @@ KEYS_FILE = Path(__file__).resolve().parent.parent / "tracker_keys.json"
 def reset():
     with engine.begin() as c:
         c.exec_driver_sql(
-            "DROP TABLE IF EXISTS audit_log, chain_txs, bank_accounts, users, credit_spend, holdings, investors, bookings, anchors, events, positions, trackers, "
+            "DROP TABLE IF EXISTS yacht_photos, valuations, follows, audit_log, chain_txs, bank_accounts, users, credit_spend, holdings, investors, bookings, anchors, events, positions, trackers, "
             "documents, compliance_config, yachts, berths, marinas CASCADE"
         )
 
@@ -140,6 +147,14 @@ def main():
             db.execute(
                 text("INSERT INTO holdings VALUES (:i,:y,:u,:m) ON CONFLICT DO NOTHING"), dict(i=h[0], y=h[1], u=h[2], m=h[3])
             )
+        today = datetime.now(timezone.utc).date()
+        for y in YACHTS:
+            for q, f in enumerate(VALUATION_PATH):
+                d = today - timedelta(days=91 * (len(VALUATION_PATH) - 1 - q))
+                db.execute(text("""INSERT INTO valuations (yacht_id, valued_at, value_usd, source) VALUES (:y,:d,:v,:s)
+                                   ON CONFLICT (yacht_id, valued_at) DO NOTHING"""),
+                           {"y": y[0], "d": d, "v": round(y[10] * f, -3) if f < 1 else y[10],
+                            "s": "Independent surveyor" if q % 2 else "Broker desktop valuation"})
         st = get_settings()
         if st.admin_email and st.admin_password:
             ensure_admin(db, st.admin_email, st.admin_password)
