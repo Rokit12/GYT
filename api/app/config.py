@@ -6,7 +6,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # Any PostgreSQL 15+ with PostGIS. For an always-on hosted database, paste the provider's URL here
+    # (keep ?sslmode=require). See README "Hosting the database".
     database_url: str = "postgresql+psycopg://gyt:gyt@localhost:5432/gyt"
+    db_pooler: str = ""              # "transaction" for PgBouncer/Supavisor transaction mode (auto for port 6543)
+    db_pool_size: int = 5
+    db_max_overflow: int = 5
+    db_pool_recycle: int = 280       # seconds; below typical idle-drop limits of hosts and load balancers
+    db_connect_timeout: int = 10
+    db_wait_seconds: int = 60        # how long startup waits for the database to answer
+    auto_migrate: bool = False       # true = API applies pending migrations at startup (handy locally)
     # Service token for simulators, schedulers and CI. Empty disables it.
     admin_token: str = ""
     # Sessions
@@ -47,6 +56,7 @@ class Settings(BaseSettings):
 
     # Uploaded yacht photos are stored here (mount a volume in production)
     media_dir: str = "media"
+    photo_storage: str = "db"        # "db" keeps photo bytes in the database, so the API holds no state
 
     # Live AIS for the maps: aisstream.io (free key at https://aisstream.io/authenticate)
     aisstream_api_key: str | None = None

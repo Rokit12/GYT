@@ -1,4 +1,4 @@
-"""Yacht photos uploaded by owners (and admins).
+"""Yacht photos uploaded by owners (and admins). Bytes live in the database by default (PHOTO_STORAGE=db).
 
 Upload is a plain POST of the image bytes (Content-Type image/jpeg|png|webp), no multipart needed.
 The browser resizes before upload, so files are small. We check the real file type from its first
@@ -11,7 +11,7 @@ import hashlib
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -66,7 +66,7 @@ def _row(r) -> dict:
 @router.get("/yachts/{yacht_id}/photos")
 def list_photos(yacht_id: str, db: Session = Depends(get_db), user: User | None = Depends(current_user)):
     manage = can_manage(db, user, yacht_id)
-    rows = db.execute(text(f"""SELECT * FROM yacht_photos WHERE yacht_id=:y {'' if manage else "AND status='published'"}
+    rows = db.execute(text(f"""SELECT id,yacht_id,caption,is_cover,sha256,bytes,content_type,created_at,status FROM yacht_photos WHERE yacht_id=:y {'' if manage else "AND status='published'"}
                               ORDER BY is_cover DESC, id"""), {"y": yacht_id}).mappings()
     return {"can_manage": manage, "photos": [_row(r) for r in rows]}
 
@@ -90,11 +90,13 @@ async def upload_photo(yacht_id: str, request: Request, caption: str = Query("",
     if db.execute(text("SELECT 1 FROM yacht_photos WHERE yacht_id=:y AND sha256=:h"), {"y": yacht_id, "h": digest}).first():
         raise HTTPException(409, "This photo is already on the yacht")
     name = f"{yacht_id}-{digest[:20]}.{EXT[ctype]}"
-    (photo_dir() / name).write_bytes(data)
-    r = db.execute(text("""INSERT INTO yacht_photos (yacht_id,user_id,stored_name,content_type,bytes,sha256,caption,is_cover)
-                           VALUES (:y,:u,:n,:c,:b,:h,:cap,:cover) RETURNING *"""),
+    in_db = get_settings().photo_storage != "disk"
+    if not in_db:
+        (photo_dir() / name).write_bytes(data)
+    r = db.execute(text("""INSERT INTO yacht_photos (yacht_id,user_id,stored_name,content_type,bytes,sha256,caption,is_cover,data)
+                           VALUES (:y,:u,:n,:c,:b,:h,:cap,:cover,:data) RETURNING id,yacht_id,caption,is_cover,sha256,bytes,content_type,created_at,status"""),
                    {"y": yacht_id, "u": user.id, "n": name, "c": ctype, "b": len(data), "h": digest,
-                    "cap": caption.strip(), "cover": n == 0}).mappings().first()
+                    "cap": caption.strip(), "cover": n == 0, "data": data if in_db else None}).mappings().first()
     record_event(db, yacht_id, "PHOTO_ADDED", document_hash=digest, payload={"photo_id": r["id"], "bytes": len(data)})
     db.commit()
     return _row(r)
@@ -118,7 +120,8 @@ def update_photo(yacht_id: str, photo_id: int, body: PhotoPatch, db: Session = D
     if body.status:
         db.execute(text("UPDATE yacht_photos SET status=:s WHERE id=:p"), {"s": body.status, "p": photo_id})
     db.commit()
-    return _row(db.execute(text("SELECT * FROM yacht_photos WHERE id=:p"), {"p": photo_id}).mappings().first())
+    return _row(db.execute(text("SELECT id,yacht_id,caption,is_cover,sha256,bytes,content_type,created_at,status FROM yacht_photos WHERE id=:p"),
+                           {"p": photo_id}).mappings().first())
 
 
 @router.delete("/yachts/{yacht_id}/photos/{photo_id}", status_code=204)
@@ -137,9 +140,11 @@ def delete_photo(yacht_id: str, photo_id: int, db: Session = Depends(get_db), us
 
 @router.get("/photos/{photo_id}")
 def photo_file(photo_id: int, db: Session = Depends(get_db), user: User | None = Depends(current_user)):
-    r = db.execute(text("SELECT yacht_id, stored_name, content_type, status FROM yacht_photos WHERE id=:p"), {"p": photo_id}).first()
+    r = db.execute(text("SELECT yacht_id, stored_name, content_type, status, data FROM yacht_photos WHERE id=:p"), {"p": photo_id}).first()
     if r is None or (r.status != "published" and not can_manage(db, user, r.yacht_id)):
         raise HTTPException(404, "Photo not found")
+    if r.data is not None:
+        return Response(bytes(r.data), media_type=r.content_type, headers={"Cache-Control": "public, max-age=86400"})
     f = photo_dir() / r.stored_name
     if not f.exists():
         raise HTTPException(404, "Photo file missing")

@@ -1,5 +1,6 @@
-# Local stack: PostGIS, a local EVM chain, contract deployment, API and web.
+# Local stack: PostGIS, a local EVM chain, contract deployment, migrations, API and web.
 #   cp .env.example .env && docker compose up --build
+# For an always-on hosted database instead of the local one, use docker-compose.hosted.yml.
 #   then: docker compose exec api python -m app.seed && ./scripts/demo.sh
 services:
   db:
@@ -33,6 +34,16 @@ services:
         --private-key ${DEPLOYER_KEY} --broadcast
     restart: "no"
 
+  migrate:
+    build: ./api
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://gyt:gyt@db:5432/gyt
+    command: ["python", "-m", "app.migrate"]
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+
   api:
     build: ./api
     env_file: .env
@@ -43,7 +54,7 @@ services:
     volumes:
       - media:/data/media
     depends_on:
-      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
       deploy: { condition: service_completed_successfully }
     ports: ["8000:8000"]
 

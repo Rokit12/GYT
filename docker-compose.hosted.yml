@@ -1,0 +1,39 @@
+# App only. The database is hosted on its own, always on (Supabase Pro, Neon with scale-to-zero off,
+# RDS, Railway, ...), so restarting or redeploying these containers never touches your data.
+#
+#   1. Put the provider's connection string in .env as DATABASE_URL (keep ?sslmode=require).
+#   2. docker compose -f docker-compose.hosted.yml run --rm migrate      # create / upgrade the schema
+#   3. docker compose -f docker-compose.hosted.yml run --rm api python -m app.seed   # first admin + sample data (optional)
+#   4. docker compose -f docker-compose.hosted.yml up -d --build
+#
+# CHAIN_RPC, ANCHOR_PRIVATE_KEY and the contract addresses in .env point at your chain (an L2 RPC).
+services:
+  migrate:
+    build: ./api
+    env_file: .env
+    command: ["python", "-m", "app.migrate"]
+    restart: "no"
+
+  api:
+    build: ./api
+    env_file: .env
+    environment:
+      PHOTO_STORAGE: db          # photos live in the database too; the container keeps no state
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    ports: ["8000:8000"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  web:
+    build: ./web
+    environment:
+      API_URL: http://api:8000
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on: [api]
+    ports: ["3000:3000"]
+    restart: unless-stopped
