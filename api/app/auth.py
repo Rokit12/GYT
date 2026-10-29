@@ -149,6 +149,11 @@ class SignUpIn(BaseModel):
     name: str = Field(min_length=2, max_length=80)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    # Optional, from the sign-up wizard
+    phone: str | None = Field(default=None, max_length=32)
+    country: str | None = Field(default=None, min_length=2, max_length=2)
+    interests: list[str] = Field(default_factory=list, max_length=5)
+    follow: list[str] = Field(default_factory=list, max_length=20)
 
 
 class SignInIn(BaseModel):
@@ -166,10 +171,16 @@ def signup(body: SignUpIn, db: Session = Depends(get_db)):
     if probs:
         raise HTTPException(422, "Password needs " + ", ".join(probs))
     try:
+        from .account import INTERESTS, follow_yachts
         uid = db.execute(
-            text("INSERT INTO users (email,name,password_hash,role,status) VALUES (:e,:n,:h,'client','pending') RETURNING id"),
-            {"e": body.email.lower(), "n": body.name.strip(), "h": hash_password(body.password)},
+            text("""INSERT INTO users (email,name,password_hash,role,status,phone,country,interests)
+                    VALUES (:e,:n,:h,'client','pending',:p,:c,:i) RETURNING id"""),
+            {"e": body.email.lower(), "n": body.name.strip(), "h": hash_password(body.password),
+             "p": (body.phone or "").strip() or None, "c": body.country.upper() if body.country else None,
+             "i": sorted(set(body.interests) & INTERESTS)},
         ).scalar_one()
+        if body.follow:
+            follow_yachts(db, uid, body.follow)
         db.commit()
     except IntegrityError:
         db.rollback()

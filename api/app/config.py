@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     osiris_endpoint: str | None = None  # CNR-ISTI OSIRIS deployment, via research partnership
     kyc_provider_key: str | None = None
 
+    # Uploaded yacht photos are stored here (mount a volume in production)
+    media_dir: str = "media"
+
     # Live AIS for the maps: aisstream.io (free key at https://aisstream.io/authenticate)
     aisstream_api_key: str | None = None
     aisstream_url: str = "wss://stream.aisstream.io/v0/stream"

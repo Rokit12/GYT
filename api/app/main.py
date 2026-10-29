@@ -10,7 +10,9 @@ from .config import get_settings
 from .db import SessionLocal, init_db
 from .events import anchor_pending
 from . import live
+from .account import router as account_router
 from .admin import router as admin_router
+from .photos import router as photos_router
 from .auth import router as auth_router
 from .routes import router
 
@@ -65,6 +67,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth_router)
+app.include_router(account_router)
+app.include_router(photos_router)
 app.include_router(admin_router)
 app.include_router(router)
 

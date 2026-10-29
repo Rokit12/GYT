@@ -10,7 +10,7 @@ export default async function SiteHeader() {
     <header className="bar nav2">
       <div className="wrap nav2-row">
         <Link href="/" className="brand2" aria-label="GYT, Global Yacht Tokenization, home"><LogoLockup /></Link>
-        <MainNav isAdmin={user?.role === "admin"} />
+        <MainNav isAdmin={user?.role === "admin"} signedIn={!!user} />
         <div className="bar-right">
           {user ? (
             <UserMenu name={user.name} email={user.email} role={user.role} status={user.status} />

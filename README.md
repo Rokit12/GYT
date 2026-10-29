@@ -91,6 +91,27 @@ force-transfer (court orders, lost wallets).
 **Double bookings** are impossible at the database level: a GiST exclusion constraint on
 `(berth_id, daterange(arrive, depart))`.
 
+## Client accounts
+
+- **Sign-up wizard** (`/signup`): account → interests, country and mobile → follow yachts → welcome checklist.
+  Live password checklist and strength meter, inline validation, and it returns you to where you started.
+- **Previews before sign-in**: signed-out visitors to `/track`, `/earn`, `/onboard` or `/account` see what the
+  feature does (live map, real unit maths, what you'll need) with sign-up and sign-in buttons, at the same URL.
+- **My GYT** (`/account`): followed, owned and held yachts with live status, a filterable activity feed of hashed
+  records, holdings (units, share, value, Use/Earn), bookings, and a setup checklist. Refreshes every 30 s.
+- **Settings** (`/account/settings`): profile, interests, notification switches, password change, investor status
+  and wallet.
+- **Photos**: owners add up to 12 photos while onboarding or later from the yacht's page (drag and drop, resized
+  in the browser, set cover, captions). Each file's SHA-256 is recorded as a `PHOTO_ADDED` event. Stored under
+  `MEDIA_DIR`.
+
+### What one unit is worth
+
+Each yacht sits in its own company, which issues `units_total` equal units. **1 unit = latest independent
+valuation ÷ units issued** (for Sea Lantern: $24.0M ÷ 40,000 = $600, i.e. 0.0025% of the yacht). The price moves
+only when a valuation is recorded (`valuations` table); it is not a market quote. `GET /yachts/{id}/units` returns
+the price, valuation history and the pseudonymous holder list; the passport shows it with a calculator.
+
 ## Site navigation
 
 The header uses the GYT mark (`web/components/Logo.tsx`; also `web/public/favicon.svg`): a yacht on moving water

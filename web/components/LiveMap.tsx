@@ -30,6 +30,7 @@ export type LiveMapProps = {
   showTraffic?: boolean;
   onSelect?: (id: string) => void;
   initial?: { center: [number, number]; zoom: number };
+  only?: string[];                  // show just these yachts (e.g. the ones you follow)
 };
 
 const api = (p: string) => fetch(`/api/gyt${p}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : Promise.reject(r.status)));
@@ -46,7 +47,9 @@ function yachtEl(name: string, onClick: () => void) {
   return el;
 }
 
-export default function LiveMap({ height = 460, focus = null, track, signals, showTraffic = true, onSelect, initial }: LiveMapProps) {
+export default function LiveMap({ height = 460, focus = null, track, signals, showTraffic = true, onSelect, initial, only }: LiveMapProps) {
+  const onlyRef = useRef(only);
+  onlyRef.current = only;
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<MlMap | null>(null);
   const markers = useRef(new Map<string, { m: Marker; from: [number, number]; to: [number, number]; t0: number }>());
@@ -145,6 +148,7 @@ export default function LiveMap({ height = 460, focus = null, track, signals, sh
       async function refresh() {
         try {
           const fleet: Fleet = await api("/live/fleet?trail_minutes=180");
+          if (onlyRef.current) fleet.features = fleet.features.filter((f) => onlyRef.current!.includes(f.properties.id));
           const seen = new Set<string>();
           for (const f of fleet.features) {
             const p = f.properties; seen.add(p.id);

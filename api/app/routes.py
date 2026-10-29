@@ -42,7 +42,7 @@ def row_or_404(row, what: str):
 def list_yachts(db: Session = Depends(get_db)):
     rows = db.execute(
         text(
-            """SELECT y.*, m.name AS marina_name,
+            """SELECT y.*, m.name AS marina_name, (SELECT id FROM yacht_photos ph WHERE ph.yacht_id = y.id AND ph.status='published' ORDER BY ph.is_cover DESC, ph.id LIMIT 1) AS cover_photo_id,
                       (SELECT json_build_object('lat', ST_Y(p.location::geometry), 'lon', ST_X(p.location::geometry),
                                                 'source', p.source, 'observed_at', p.observed_at)
                        FROM positions p WHERE p.yacht_id = y.id ORDER BY p.observed_at DESC LIMIT 1) AS last_position
@@ -57,7 +57,7 @@ def list_yachts(db: Session = Depends(get_db)):
 def passport(yacht_id: str, db: Session = Depends(get_db)):
     y = row_or_404(
         db.execute(
-            text("SELECT y.*, m.name AS marina_name FROM yachts y LEFT JOIN marinas m ON m.id=y.home_marina_id WHERE y.id=:i"),
+            text("SELECT y.*, m.name AS marina_name, (SELECT id FROM yacht_photos ph WHERE ph.yacht_id = y.id AND ph.status='published' ORDER BY ph.is_cover DESC, ph.id LIMIT 1) AS cover_photo_id FROM yachts y LEFT JOIN marinas m ON m.id=y.home_marina_id WHERE y.id=:i"),
             {"i": yacht_id},
         ).mappings().first(),
         "Yacht",
@@ -106,14 +106,14 @@ def onboard_yacht(body: YachtCreate, db: Session = Depends(get_db), user: User =
         db.execute(
             text(
                 """INSERT INTO yachts (id,name,mmsi,imo,flag,registry_ref,loa_m,beam_m,year_built,builder,home_marina_id,
-                                       berth_code,valuation_usd,charter_week_usd,units_total,tokenized,docs_root)
-                   VALUES (:id,:name,:mmsi,:imo,:flag,:reg,:loa,:beam,:yb,:builder,:home,:berth,:val,:cw,:units,:tok,:root)"""
+                                       berth_code,valuation_usd,charter_week_usd,units_total,tokenized,docs_root,owner_user_id)
+                   VALUES (:id,:name,:mmsi,:imo,:flag,:reg,:loa,:beam,:yb,:builder,:home,:berth,:val,:cw,:units,:tok,:root,:owner)"""
             ),
             dict(
                 id=yacht_id, name=body.name, mmsi=body.mmsi, imo=body.imo, flag=body.flag, reg=body.registry_ref,
                 loa=body.loa_m, beam=body.beam_m, yb=body.year_built, builder=body.builder, home=body.home_marina_id,
                 berth=body.berth_code, val=body.valuation_usd, cw=body.charter_week_usd, units=body.units_total,
-                tok=body.units_total > 0, root=docs_root,
+                tok=body.units_total > 0, root=docs_root, owner=user.id,
             ),
         )
     except IntegrityError:

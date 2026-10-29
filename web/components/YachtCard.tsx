@@ -8,12 +8,14 @@ export type CardYacht = {
   id: string; name: string; loa_m: string | number; flag: string; marina_name: string; tokenized: boolean;
   insurance_verified: boolean; charter_week_usd: string | number | null;
   last_position: { observed_at: string; source: string } | null;
+  cover_photo_id?: number | null; valuation_usd?: string | number | null; units_total?: number;
 };
 
 const usd = (v: string | number | null) => `$${Math.round(Number(v ?? 0)).toLocaleString()}`;
 
-export function YachtImage({ id, alt, className = "" }: { id: string; alt: string; className?: string }) {
-  const [src, setSrc] = useState(`/media/yachts/${id}.jpg`);
+export function YachtImage({ id, alt, className = "", cover }: { id: string; alt: string; className?: string; cover?: number | null }) {
+  // An owner's cover photo wins over GYT's rendered illustration.
+  const [src, setSrc] = useState(cover ? `/api/gyt/photos/${cover}` : `/media/yachts/${id}.jpg`);
   return <img className={className} src={src} alt={alt} loading="lazy" decoding="async" onError={() => setSrc("/media/yachts/default.jpg")} />;
 }
 
@@ -22,7 +24,7 @@ export default function YachtCard({ y, compact = false }: { y: CardYacht; compac
   return (
     <Tilt className="ycard2">
       <Link href={`/yachts/${y.id}`} className="ycard2-media" aria-label={`${y.name} passport`}>
-        <YachtImage id={y.id} alt={`${y.name}, ${Number(y.loa_m)} metre yacht`} />
+        <YachtImage id={y.id} cover={y.cover_photo_id} alt={`${y.name}, ${Number(y.loa_m)} metre yacht`} />
         <span className="sheen" aria-hidden="true" />
         {fresh && <span className="live-badge"><span className="dot on" aria-hidden="true" />Live</span>}
         <span className="ycard2-len">{Number(y.loa_m)}<small>m</small></span>
@@ -39,7 +41,8 @@ export default function YachtCard({ y, compact = false }: { y: CardYacht; compac
           </span>
         )}
         <span className="row" style={{ justifyContent: "space-between" }}>
-          <span className="small">{usd(y.charter_week_usd)} <span className="muted">/ week</span></span>
+          <span className="small">{usd(y.charter_week_usd)} <span className="muted">/ week</span>
+            {y.tokenized && y.valuation_usd && y.units_total ? <><br /><span className="muted">1 unit ≈ </span>{usd(Number(y.valuation_usd) / y.units_total)}</> : null}</span>
           <Link className="btn sm primary" href={`/track?yacht=${y.id}`}>Track</Link>
         </span>
       </div>

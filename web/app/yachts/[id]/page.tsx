@@ -4,6 +4,9 @@ import { api, usd, type Passport } from "@/lib/api";
 import VerifyProof from "@/components/VerifyProof";
 import Gallery from "@/components/Gallery";
 import LiveMap from "@/components/LiveMap";
+import UnitsPanel from "@/components/UnitsPanel";
+import FollowButton from "@/components/FollowButton";
+import PhotoManager from "@/components/PhotoManager";
 
 export const dynamic = "force-dynamic";
 
@@ -35,9 +38,19 @@ export default async function PassportPage({ params }: { params: { id: string } 
           <div className="eyebrow">{y.id} · Yacht passport</div>
           <h1>{y.name}</h1>
         </div>
-        <Link className="btn primary" href={`/track?yacht=${y.id}`}>Track this yacht</Link>
+        <div className="row">
+          <FollowButton yachtId={y.id} name={y.name} />
+          <Link className="btn primary" href={`/track?yacht=${y.id}`}>Track this yacht</Link>
+        </div>
       </div>
       <Gallery id={y.id} name={y.name} />
+      {y.tokenized && y.valuation_usd && y.units_total ? (
+        <a className="unitstrip" href="#units">
+          <span className="eyebrow">1 unit</span><b>{usd(Number(y.valuation_usd) / y.units_total)}</b>
+          <span className="small muted">= {(100 / y.units_total).toPrecision(2)}% of {y.name} · {usd(y.valuation_usd, true)} ÷ {y.units_total.toLocaleString()} units</span>
+          <span className="small">See who holds them ↓</span>
+        </a>
+      ) : null}
       <div className="grid g2">
         <div className="grid" style={{ alignContent: "start" }}>
           <div className="panel">
@@ -88,6 +101,8 @@ export default async function PassportPage({ params }: { params: { id: string } 
           </div>
         </div>
       </div>
+      <PhotoManager yachtId={y.id} name={y.name} />
+      <UnitsPanel yachtId={y.id} />
     </main>
   );
 }

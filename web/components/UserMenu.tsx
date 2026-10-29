@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -39,7 +40,9 @@ export default function UserMenu({ name, email, role, status }: { name: string; 
               An admin reviews new accounts. You can browse and track now; bookings open after approval.
             </p>
           )}
-          <button role="menuitem" onClick={refresh}>Check approval status</button>
+          <Link role="menuitem" className="btn" href="/account" onClick={() => setOpen(false)}>My GYT</Link>
+          <Link role="menuitem" className="btn" href="/account/settings" onClick={() => setOpen(false)}>Profile &amp; settings</Link>
+          {status === "pending" && <button role="menuitem" onClick={refresh}>Check approval status</button>}
           <button role="menuitem" onClick={signOut}>Sign out</button>
         </div>
       )}

@@ -18,7 +18,7 @@ const PLATFORM = [
 ];
 
 /** Main navigation: hover pill, ink under the current page, Platform mega menu, mobile drawer. */
-export default function MainNav({ isAdmin }: { isAdmin: boolean }) {
+export default function MainNav({ isAdmin, signedIn = false }: { isAdmin: boolean; signedIn?: boolean }) {
   const path = usePathname();
   const nav = useRef<HTMLElement>(null);
   const [drawer, setDrawer] = useState(false);
@@ -114,6 +114,7 @@ export default function MainNav({ isAdmin }: { isAdmin: boolean }) {
             </div>
           </li>
           {link("/about", "About")}
+          {signedIn && link("/account", "My GYT")}
           {isAdmin && link("/admin", "Admin console")}
         </ul>
         <span className="nav-pill" aria-hidden="true" />
