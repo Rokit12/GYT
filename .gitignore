@@ -12,3 +12,6 @@ contracts/broadcast/
 backups/
 media/
 *.zip
+
+# GitHub Pages site assets
+!site/media/
