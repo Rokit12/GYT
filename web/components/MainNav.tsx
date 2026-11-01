@@ -9,11 +9,13 @@ const ICON: Record<string, React.ReactNode> = {
   verify: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l7 3v5c0 4.6-3 8.2-7 10-4-1.8-7-5.4-7-10V6z" /><path d="M8.6 12.2l2.4 2.4 4.6-4.8" /></svg>,
   earn: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3" /></svg>,
   phone: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.2" /><path d="M11 18.5h2" /><path d="M12 7.2a2.4 2.4 0 0 1 2.4 2.4c0 1.8-2.4 4-2.4 4s-2.4-2.2-2.4-4A2.4 2.4 0 0 1 12 7.2z" /></svg>,
+  berth: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 5h18" /><path d="M6 5v14M12 5v10M18 5v12" /><path d="M8.5 12.5 9.8 8h1.4l1.3 4.5-2 2.5z" /></svg>,
   list: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="2" /><path d="M12 7v13M5 13a7 7 0 0 0 14 0M8 11h8" /></svg>,
 };
 const PLATFORM = [
   { href: "/track", icon: "track", t: "Track & verify", d: "Follow a yacht live and check every record it leaves." },
   { href: "/track/device", icon: "phone", t: "Track from your phone", d: "No tracker on board? Share your phone's location as the yacht's." },
+  { href: "/berths", icon: "berth", t: "Find a berth", d: "Berths matched to your yacht's size, held live so no one double-books." },
   { href: "/verify", icon: "verify", t: "Verify a record", d: "Paste any hash. Your browser checks it against the chain." },
   { href: "/earn", icon: "earn", t: "Use or Earn", d: "Turn ownership units into nights aboard, or into income." },
   { href: "/onboard", icon: "list", t: "List your yacht", d: "Get a verified passport and three-signal tracking." },

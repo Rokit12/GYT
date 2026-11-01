@@ -330,6 +330,14 @@ def book_berth(body: BerthBookingIn, db: Session = Depends(get_db), user: User =
     if y.loa_m > b["max_loa_m"] or y.beam_m > b["max_beam_m"]:
         raise HTTPException(422, f"Yacht ({y.loa_m} m × {y.beam_m} m) does not fit berth {b['code']}")
     amount = float(b["rate_usd_day"]) * (body.depart - body.arrive).days
+    # Respect live holds: another yacht that picked this berth first keeps it while its hold runs.
+    held = db.execute(
+        text("""SELECT expires_at FROM berth_holds WHERE berth_id=:b AND status='active' AND expires_at > now()
+                AND yacht_id <> :y AND daterange(arrive,depart) && daterange(:a,:d) LIMIT 1"""),
+        {"b": body.berth_id, "y": body.yacht_id, "a": body.arrive, "d": body.depart},
+    ).first()
+    if held:
+        raise HTTPException(409, f"Another yacht is holding berth {b['code']} until {held.expires_at:%H:%M} UTC")
     try:
         db.execute(
             text(

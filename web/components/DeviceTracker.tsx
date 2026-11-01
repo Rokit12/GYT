@@ -385,7 +385,8 @@ function CrewPanel({ yachtId }: { yachtId: string }) {
   return (
     <div className="panel">
       <header><h3>Crew who can share location</h3></header>
-      <p className="small muted">Add your captain or skipper so they can track the yacht from their own phone. They need a GYT account first.</p>
+      <p className="small muted">Add your captain or skipper so they can track the yacht from their own phone. If they don&apos;t have a GYT account yet, send them an invite code: they join straight onto this yacht&apos;s crew.</p>
+      <InviteBox yachtId={yachtId} />
       <ul className="crew-list">
         {crew.map((c) => (
           <li key={c.id}><span><b>{c.name}</b> <span className="small muted">{c.email} · {c.role}</span></span>
@@ -398,6 +399,34 @@ function CrewPanel({ yachtId }: { yachtId: string }) {
         <select value={role} onChange={(e) => setRole(e.target.value)} aria-label="Role"><option value="captain">Captain</option><option value="crew">Crew</option></select>
         <button className="primary">Add</button>
       </form>
+      {err && <p className="err small">{err}</p>}
+    </div>
+  );
+}
+
+function InviteBox({ yachtId }: { yachtId: string }) {
+  const [email, setEmail] = useState("");
+  const [inv, setInv] = useState<{ code: string; expires_at: string } | null>(null);
+  const [err, setErr] = useState("");
+  const [copied, setCopied] = useState(false);
+  async function make() {
+    setErr(""); setCopied(false);
+    try {
+      setInv(await call<{ code: string; expires_at: string }>("/invites", { method: "POST", body: JSON.stringify({ role: "captain", yacht_id: yachtId, email: email || null }) }));
+    } catch (e) { setErr((e as Error).message); }
+  }
+  const link = inv ? `${typeof window !== "undefined" ? window.location.origin : ""}/signup?invite=${inv.code}` : "";
+  return (
+    <div className="invite-box">
+      <div className="crew-form">
+        <input type="email" placeholder="Their email (optional, locks the code to it)" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Invitee email" />
+        <button type="button" onClick={make}>Create invite code</button>
+      </div>
+      {inv && (
+        <p className="small">Code <b className="mono">{inv.code}</b> · valid until {new Date(inv.expires_at).toLocaleDateString()} ·{" "}
+          <button type="button" className="sm" onClick={async () => { try { await navigator.clipboard.writeText(link); setCopied(true); } catch { setCopied(false); } }}>{copied ? "Link copied" : "Copy sign-up link"}</button>
+          <br /><span className="mono small muted" style={{ wordBreak: "break-all" }}>{link}</span></p>
+      )}
       {err && <p className="err small">{err}</p>}
     </div>
   );

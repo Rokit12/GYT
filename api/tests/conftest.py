@@ -11,6 +11,10 @@ if DB:
     os.environ["DATABASE_URL"] = DB
     os.environ["ANCHOR_INTERVAL_SECONDS"] = "0"
     os.environ["DIGITRAFFIC_ENABLED"] = "false"
+    os.environ["AUTOPILOT_INTERVAL_SECONDS"] = "0"
+    os.environ["ANTHROPIC_API_KEY"] = ""
+    # Most flows sign people up freely; test_flow_registration.py switches the owner-only rule on.
+    os.environ["REGISTRATION_MODE"] = "open"
     os.environ["ADMIN_TOKEN"] = "test-admin"
     os.environ["JWT_SECRET"] = "test-secret-" + "x" * 40
     os.environ["ADMIN_EMAIL"] = "admin@gyt.com"

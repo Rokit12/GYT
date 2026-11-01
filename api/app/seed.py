@@ -36,6 +36,11 @@ BERTHS = [
     ("MARINA-DXB-001", "B128", 35, 8, 850, "Shore power 125A, fuel, crew lounge"),
     ("MARINA-DXB-001", "A040", 60, 12, 2100, "Shore power 400A, fuel, security"),
     ("MARINA-DXB-001", "C210", 24, 6.5, 520, "Shore power 63A, water"),
+    ("MARINA-DXB-001", "C214", 20, 5.5, 410, "Shore power 32A, water"),
+    ("MARINA-DXB-001", "B130", 30, 7.2, 690, "Shore power 63A, water, fuel"),
+    ("MARINA-DXB-001", "B132", 40, 8.8, 1100, "Shore power 125A, fuel"),
+    ("MARINA-DXB-001", "A044", 50, 10.5, 1600, "Shore power 250A, fuel, security"),
+    ("MARINA-DXB-001", "A050", 75, 14, 3200, "Shore power 400A, fuel, crew quarters"),
     ("MARINA-AUH-002", "Y12", 50, 10, 1600, "Shore power 250A, fuel"),
     ("MARINA-AUH-002", "Y31", 36, 8.2, 900, "Shore power 125A, water"),
     ("MARINA-MCO-001", "Q.1", 70, 13, 4200, "Shore power 400A, black water, concierge"),
@@ -88,7 +93,7 @@ KEYS_FILE = Path(__file__).resolve().parent.parent / "tracker_keys.json"
 def reset():
     with engine.begin() as c:
         c.exec_driver_sql(
-            "DROP TABLE IF EXISTS schema_migrations, device_sessions, yacht_crew, yacht_photos, valuations, follows, audit_log, chain_txs, bank_accounts, users, credit_spend, holdings, investors, bookings, anchors, events, positions, trackers, "
+            "DROP TABLE IF EXISTS schema_migrations, autopilot_log, owner_claims, invites, berth_holds, device_sessions, yacht_crew, yacht_photos, valuations, follows, audit_log, chain_txs, bank_accounts, users, credit_spend, holdings, investors, bookings, anchors, events, positions, trackers, "
             "documents, compliance_config, yachts, berths, marinas CASCADE"
         )
 
@@ -116,6 +121,8 @@ def main():
                         VALUES (:m,:c,:l,:b,:r,:s) ON CONFLICT DO NOTHING"""),
                 dict(m=b[0], c=b[1], l=b[2], b=b[3], r=b[4], s=b[5]),
             )
+        # Water depth at each berth (sample values: deeper for bigger berths)
+        db.execute(text("UPDATE berths SET max_draft_m = round((2 + max_loa_m * 0.06)::numeric, 1) WHERE max_draft_m IS NULL"))
         new = []
         for i, y in enumerate(YACHTS, start=1):
             res = db.execute(
@@ -183,6 +190,8 @@ def main():
             db.execute(text("UPDATE yachts SET twin_token_id=NULL WHERE id = ANY(:ids) AND twin_tx IS NULL"), {"ids": [y[0] for y in YACHTS]})
         for y in new:
             record_event(db, y[0], "TWIN_MINT", marina_id=y[8], berth_code=y[9])
+        # Sample drafts (how deep each hull sits), so berth depth can be checked
+        db.execute(text("UPDATE yachts SET draft_m = round((loa_m * 0.075)::numeric, 1) WHERE draft_m IS NULL"))
         db.commit()
     KEYS_FILE.write_text(json.dumps(keys, indent=2))
     print(f"Seeded {len(MARINAS)} marinas, {len(BERTHS)} berths, {len(YACHTS)} yachts, {len(INVESTORS)} investors.")

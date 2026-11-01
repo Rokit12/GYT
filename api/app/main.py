@@ -15,6 +15,9 @@ from .account import router as account_router
 from .admin import router as admin_router
 from .photos import router as photos_router
 from .devices import router as devices_router
+from .berths import router as berths_router
+from .registration import router as registration_router
+from .autopilot import router as autopilot_router
 from .auth import router as auth_router
 from .routes import router
 
@@ -32,6 +35,19 @@ async def anchor_loop(interval: int):
                     log.info("anchored %s events root=%s chain_tx=%s", res["leaf_count"], res["root"], res["chain_tx"])
         except Exception:  # keep the loop alive; the next tick retries the same events
             log.exception("anchor loop failed")
+
+
+async def autopilot_loop(interval: int):
+    from . import autopilot
+
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            with SessionLocal() as db:
+                res = await asyncio.to_thread(autopilot.run, db)
+                log.info("autopilot: %s", res)
+        except Exception:  # never let one bad run stop the loop
+            log.exception("autopilot run failed")
 
 
 async def _digitraffic():
@@ -65,6 +81,8 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(live.run(SessionLocal)))
     if s.digitraffic_enabled:
         tasks.append(asyncio.create_task(_digitraffic()))
+    if s.autopilot_interval_seconds > 0:
+        tasks.append(asyncio.create_task(autopilot_loop(s.autopilot_interval_seconds)))
     yield
     for t in tasks:
         t.cancel()
@@ -81,6 +99,9 @@ app.include_router(auth_router)
 app.include_router(account_router)
 app.include_router(photos_router)
 app.include_router(devices_router)
+app.include_router(berths_router)
+app.include_router(registration_router)
+app.include_router(autopilot_router)
 app.include_router(admin_router)
 app.include_router(router)
 

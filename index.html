@@ -1,4 +1,72 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<style>
+/* ---------------- v7: berth finder, berth board, autopilot, owner sign-up ---------------- */
+.pickgrid.two { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.filepick input[type=file] { padding: 10px; border: 1px dashed var(--line); border-radius: 8px; background: var(--surface2); }
+.bf { display: grid; gap: 14px; }
+.bf-q { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.bf-q .f { display: grid; gap: 4px; font-weight: 600; min-width: 150px; flex: 1 1 150px; }
+.bf-live { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.livedot2 { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 60%, transparent); animation: devt-pulse 1.6s infinite; }
+.bf-scroll { overflow-x: auto; max-width: 100%; padding-bottom: 6px; }
+.pontoon { display: block; font-family: var(--body); }
+.pt-deck { fill: color-mix(in srgb, var(--brass) 35%, var(--surface2)); }
+.pt-lbl { font: 600 10px var(--mono); fill: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+.slip { cursor: pointer; outline: none; }
+.slip .sl-box { fill: color-mix(in srgb, #4aa3c7 14%, var(--surface)); stroke: var(--line); stroke-width: 1.2; transition: fill .2s, stroke .2s; }
+.slip.free .sl-box { fill: color-mix(in srgb, var(--ok) 16%, var(--surface)); stroke: var(--ok); }
+.slip.best .sl-box { fill: color-mix(in srgb, var(--brass) 20%, var(--surface)); stroke: var(--brass); stroke-width: 2; }
+.slip.held .sl-box { fill: color-mix(in srgb, var(--warn) 26%, var(--surface)); stroke: var(--warn); }
+.slip.mine .sl-box { fill: color-mix(in srgb, var(--accent) 26%, var(--surface)); stroke: var(--accent); stroke-width: 2; }
+.slip.small .sl-box { fill: var(--surface2); stroke-dasharray: 4 3; opacity: .7; }
+.slip.booked .sl-box { fill: color-mix(in srgb, var(--muted) 22%, var(--surface)); }
+.slip.on .sl-box, .slip:focus-visible .sl-box { stroke: var(--ink); stroke-width: 2.5; }
+.slip .ghost { fill: color-mix(in srgb, var(--accent) 55%, transparent); stroke: var(--accent); stroke-width: 1.5; }
+.slip .ghost.bad { fill: color-mix(in srgb, var(--crit) 45%, transparent); stroke: var(--crit); }
+.sl-code { font: 700 11px var(--body); fill: var(--ink); text-anchor: middle; }
+.sl-size, .sl-clock { font: 10px var(--mono); fill: var(--muted); text-anchor: middle; }
+.sl-clock { fill: var(--warn); font-weight: 700; }
+.sl-star { font-size: 13px; fill: var(--brass); text-anchor: middle; }
+.bf-legend { flex-wrap: wrap; }
+.bf-legend > span { display: inline-flex; align-items: center; gap: 2px; }
+.bf-legend i.swc { width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--line); margin-right: 4px; }
+.bf-legend i.swc-free { background: color-mix(in srgb, var(--ok) 30%, var(--surface)); } .bf-legend i.swc-best { background: color-mix(in srgb, var(--brass) 40%, var(--surface)); }
+.bf-legend i.swc-held { background: color-mix(in srgb, var(--warn) 40%, var(--surface)); } .bf-legend i.swc-mine { background: color-mix(in srgb, var(--accent) 40%, var(--surface)); }
+.bf-legend i.swc-small { background: var(--surface2); border-style: dashed; } .bf-legend i.swc-booked { background: color-mix(in srgb, var(--muted) 30%, var(--surface)); }
+.bf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.bcard { display: grid; gap: 4px; text-align: left; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); cursor: pointer; transition: border-color .2s, transform .2s; }
+.bcard:hover { transform: translateY(-1px); }
+.bcard.on { border-color: var(--ink); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
+.bcard.best { border-color: var(--brass); }
+.bcard.s-too_small, .bcard.s-booked, .bcard.s-maintenance { opacity: .66; }
+.bcard.s-held { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 7%, var(--surface)); }
+.bcard.s-held_by_you, .bcard.s-booked_by_you { border-color: var(--accent); }
+.bf-act { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; border-color: var(--ink); }
+.bf-done { display: grid; gap: 4px; justify-items: start; border-color: var(--ok); }
+.warn-t { color: var(--warn); } .crit-t { color: var(--crit); } .ok-t { color: var(--ok); }
+.board { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.bslot { display: grid; gap: 6px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); border-left-width: 5px; }
+.bslot.st-free { border-left-color: var(--ok); } .bslot.st-held { border-left-color: var(--warn); background: color-mix(in srgb, var(--warn) 6%, var(--surface)); }
+.bslot.st-booked { border-left-color: var(--accent); } .bslot.st-occupied { border-left-color: var(--brass); } .bslot.st-maintenance { border-left-color: var(--muted); opacity: .7; }
+.bslot.has-issue { box-shadow: 0 0 0 2px color-mix(in srgb, var(--crit) 40%, transparent); }
+.bslot-meter { height: 6px; border-radius: 4px; background: var(--surface2); overflow: hidden; }
+.bslot-meter i { display: block; height: 100%; background: var(--accent); }
+.ap-status { display: grid; gap: 6px; }
+.aplist { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.aplist li { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.aplist li.res { opacity: .55; }
+@media (max-width: 760px) { .aplist li { grid-template-columns: auto minmax(0, 1fr); } }
+
+.ap-status .pill { justify-self: start; }
+#v-auto .grid.g4, #v-bboard .grid.g4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { #v-auto .grid.g4, #v-bboard .grid.g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.slip .moored { fill: color-mix(in srgb, var(--muted) 45%, transparent); stroke: var(--muted); stroke-width: 1; }
+.bf-pick, .ap-brief { display: flex; gap: 14px; align-items: flex-start; border-color: var(--brass); background: color-mix(in srgb, var(--brass) 7%, var(--surface)); }
+.ap-badge { flex: none; font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: #fff; background: linear-gradient(135deg, #0b6e73, #9a6f14); padding: 5px 9px; border-radius: 6px; }
+.ap-brief ol { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 3px; }
+.aplist li.aprow { animation: aprow .5s ease-out; }
+@keyframes aprow { from { background: color-mix(in srgb, var(--brass) 18%, transparent); } to { background: transparent; } }
+</style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="" defer></script>
 <style>
@@ -965,10 +1033,10 @@ tr.avail-row td { color: var(--muted); font-style: italic; }
 
 <main class="wrap shell" id="shell">
 <aside class="admin-nav" id="adminSide" hidden aria-label="Admin console">
-  <div><div class="eyebrow">Overview</div><a href="#admin">Dashboard</a><a href="#monitoring">Yacht monitoring</a></div>
+  <div><div class="eyebrow">Overview</div><a href="#admin">Dashboard</a><a href="#autopilot">Autopilot (AI)</a><a href="#monitoring">Yacht monitoring</a></div>
   <div><div class="eyebrow">Registry</div><a href="#yachts">Yachts &amp; minting</a><a href="#hashes">Hashes &amp; addresses</a></div>
   <div><div class="eyebrow">People &amp; money</div><a href="#users">Users &amp; approvals</a><a href="#investors">Investors &amp; KYC</a><a href="#banking">Banking details</a></div>
-  <div><div class="eyebrow">Operations</div><a href="#operations">Bookings &amp; escrow</a><a href="#marinas">Marinas &amp; berths</a></div>
+  <div><div class="eyebrow">Operations</div><a href="#berthboard">Berth board</a><a href="#operations">Bookings &amp; escrow</a><a href="#marinas">Marinas &amp; berths</a></div>
   <div><div class="eyebrow">Records</div><a href="#audit">Audit log</a></div>
   <div><div class="eyebrow">Documentation · internal</div><a href="#docs-revenue">Revenue model</a><a href="#docs-tracking">Tracking stack</a><a href="#docs-research">What to tokenize</a><a href="#docs-pitch">YC pitch</a></div>
   <div class="chain small"><span class="dot"></span><span id="chainStat">Proof chain · block —</span></div>
@@ -1080,6 +1148,48 @@ tr.avail-row td { color: var(--muted); font-style: italic; }
 </section>
 
 <!-- ============ ABOUT ============ -->
+<!-- ============ FIND A BERTH ============ -->
+<section class="view" id="v-berths" data-view="berths" hidden>
+  <div><div class="eyebrow">Berths</div><h1>Find a berth that fits</h1>
+    <p class="lede">Every berth at the marina, drawn to scale against your yacht. Hold one while you confirm: other yachts see it as taken straight away, and no one can book a berth their yacht doesn&#39;t fit.</p></div>
+  <form class="panel bf-q" id="bfQ" onsubmit="return false">
+    <label class="f" for="bfYacht">Yacht<select id="bfYacht"></select></label>
+    <label class="f" for="bfMarina">Marina<select id="bfMarina"></select></label>
+    <label class="f" for="bfArr">Arrive<input type="date" id="bfArr"></label>
+    <label class="f" for="bfDep">Depart<input type="date" id="bfDep"></label>
+    <span class="bf-live small"><span class="livedot2" aria-hidden="true"></span> Live: other yachts are searching too</span>
+  </form>
+  <p class="banner" id="bfNote" hidden role="status"></p>
+  <div class="panel bf-pick" id="bfPick" hidden></div>
+  <div class="panel"><header><h3 id="bfTitle">—</h3><span class="legend bf-legend small"><span><i class="swc swc-free"></i>Fits</span><span><i class="swc swc-best"></i>Best fit</span><span><i class="swc swc-held"></i>Held by another yacht</span><span><i class="swc swc-mine"></i>Yours</span><span><i class="swc swc-small"></i>Too small</span><span><i class="swc swc-booked"></i>Booked</span></span></header>
+    <div class="bf-scroll" id="bfDraw"></div></div>
+  <div class="panel bf-act" id="bfAct" hidden></div>
+  <div class="bf-grid" id="bfGrid"></div>
+  <p class="small muted">In this preview, other demo yachts search and hold berths on their own so you can see live holds. On the live platform the database guarantees two yachts can never hold or book the same berth for overlapping dates.</p>
+</section>
+
+<!-- ============ ADMIN: BERTH BOARD ============ -->
+<section class="view" id="v-bboard" data-view="berthboard" hidden>
+  <div class="row" style="justify-content:space-between;align-items:flex-end"><div><div class="eyebrow">Operations</div><h1>Berth board</h1></div>
+    <div class="row"><select id="bbMarina" aria-label="Marina"></select><span class="small muted"><span class="livedot2" aria-hidden="true"></span> live</span></div></div>
+  <div class="grid g4" id="bbKpi"></div>
+  <div class="board" id="bbGrid"></div>
+  <div class="panel"><header><h3>Autopilot findings for this marina</h3><a class="small" href="#autopilot">Open Autopilot →</a></header><ul class="aplist" id="bbFlags"></ul></div>
+</section>
+
+<!-- ============ ADMIN: AUTOPILOT ============ -->
+<section class="view" id="v-auto" data-view="autopilot" hidden>
+  <div class="row" style="justify-content:space-between;align-items:flex-end"><div><div class="eyebrow">Automation</div><h1>Autopilot</h1></div>
+    <div class="row"><button class="primary" id="apRun" type="button">Run now</button><button id="apApprove" type="button">Approve recommended</button></div></div>
+  <div class="panel ap-status"><span class="pill ok" id="apAi">AI on · reads certificates, writes the brief</span>
+    <span class="small muted">Runs every 2 min on the live platform · last run <b id="apLast">not yet</b></span>
+    <p class="small muted" style="margin:0">The rules decide: a yacht never gets a berth it doesn&#39;t fit, and no one is approved unless every check passes. AI only reads documents and summarises; it can add a reason to review, never approve, move money or change bookings. In this preview the AI step is simulated.</p></div>
+  <div class="panel ap-brief" id="apBrief" hidden></div>
+  <div class="grid g4" id="apKpi"></div>
+  <div class="panel"><header><h3>Owner sign-ups waiting</h3><span class="small muted">Screened automatically</span></header><div class="tbl"><table><thead><tr><th>Owner</th><th>Yacht</th><th>Checks</th><th>AI reading</th><th></th></tr></thead><tbody id="apRegs"></tbody></table></div></div>
+  <div class="panel"><header><h3>What the autopilot did</h3></header><ul class="aplist" id="apLog"></ul></div>
+</section>
+
 <!-- ============ YACHT MAP (OpenStreetMap) ============ -->
 <section class="view" id="v-osm" data-view="map" hidden>
   <div><div class="eyebrow">Yacht map</div><h1>Where every yacht is</h1>
@@ -1691,7 +1801,7 @@ tr.avail-row td { color: var(--muted); font-style: italic; }
   <div class="foot2-grid">
     <div class="foot2-brand"><a class="brand2" href="#home" aria-label="GYT home"><span class="mark" data-logo></span><span class="wm"><b>GYT</b><small>Global Yacht<br>Tokenization</small></span></a>
       <p class="small muted">Verified passports, live tracking and records anyone can check, for every yacht on the platform.</p></div>
-    <nav aria-label="Platform"><b>Platform</b><a href="#explore">Explore yachts</a><a href="#map">Yacht map</a><a href="#how">How it works</a><a href="#track">Track &amp; verify</a><a href="#device">Track from your phone</a><a href="#earn">Use or Earn</a></nav>
+    <nav aria-label="Platform"><b>Platform</b><a href="#explore">Explore yachts</a><a href="#map">Yacht map</a><a href="#how">How it works</a><a href="#track">Track &amp; verify</a><a href="#device">Track from your phone</a><a href="#berths">Find a berth</a><a href="#earn">Use or Earn</a></nav>
     <nav aria-label="Company"><b>Company</b><a href="#about">About GYT</a><a href="#onboard">List your yacht</a><a href="#how-faq" data-faq>Questions</a><a href="#signup">Create an account</a></nav>
     <nav aria-label="Data"><b>Open data we use</b><span class="small muted">AIS: Digitraffic, aisstream.io</span><span class="small muted">Maps: OpenStreetMap, Natural Earth</span><span class="small muted">Radar: Copernicus Sentinel-1</span></nav>
   </div>
@@ -2363,8 +2473,8 @@ document.addEventListener('click',e=>{const b=e.target.closest('button[data-conf
 
 /* ---------- navigation ---------- */
 const PUBLIC_V=['home','explore','map','how','about','signin','signup'];
-const SIGNED_V=['track','device','earn','onboard','account','settings'];
-const ADMIN_V=['admin','monitoring','yachts','hashes','users','investors','banking','operations','marinas','audit','docs-revenue','docs-tracking','docs-research','docs-pitch'];
+const SIGNED_V=['track','device','berths','earn','onboard','account','settings'];
+const ADMIN_V=['admin','autopilot','berthboard','monitoring','yachts','hashes','users','investors','banking','operations','marinas','audit','docs-revenue','docs-tracking','docs-research','docs-pitch'];
 const ALL_V=[...PUBLIC_V,...SIGNED_V,...ADMIN_V];
 let afterSignIn=null;
 /* ---------- v4: logo + navigation builder ---------- */
@@ -2377,16 +2487,18 @@ const NAVICON={
  verify:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.6-3 8.2-7 10-4-1.8-7-5.4-7-10V6z"/><path d="M8.6 12.2l2.4 2.4 4.6-4.8"/></svg>',
  earn:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>',
  phone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18.5h2"/><path d="M12 7.2a2.4 2.4 0 0 1 2.4 2.4c0 1.8-2.4 4-2.4 4s-2.4-2.2-2.4-4A2.4 2.4 0 0 1 12 7.2z"/></svg>',
+ berth:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18"/><path d="M6 5v14M12 5v10M18 5v12"/><path d="M8.5 12.5 9.8 8h1.4l1.3 4.5-2 2.5z"/></svg>',
  list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><path d="M12 7v13M5 13a7 7 0 0 0 14 0M8 11h8"/></svg>'};
 function buildNav(cur,curAdmin){
   const a=(h,l,on)=>`<li><a class="nl" href="#${h}"${(on??h===cur)?' aria-current="page"':''}>${l}</a></li>`;
   const mi=(h,ic,t,d,extra='')=>`<a class="mi" href="#${h}"${extra}><span class="ic">${NAVICON[ic]}</span><span><b>${t}</b><span>${d}</span></span></a>`;
-  const plat=['track','device','earn','onboard'].includes(cur);
+  const plat=['track','device','berths','earn','onboard'].includes(cur);
   return `<ul class="nav-list">${a('explore','Explore yachts')}${a('map','Map')}${a('how','How it works')}
   <li class="has-mega"><button class="nl" type="button" aria-expanded="false" aria-controls="megaPlat"${plat?' aria-current="page"':''}>Platform <svg class="chev" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 3.5 5 7l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
    <div class="mega" id="megaPlat"><div class="mega-links">
     ${mi('track','track','Track &amp; verify','Follow a yacht live and check every record it leaves.')}
     ${mi('device','phone','Track from your phone','No tracker on board? Share your phone\'s location as the yacht\'s.')}
+    ${mi('berths','berth','Find a berth','Berths matched to your yacht\'s size, held live so no one double-books.')}
     ${mi('home','verify','Verify a record','Paste any hash. Your browser checks it against the chain.',' data-verify')}
     ${mi('earn','earn','Use or Earn','Turn ownership units into nights aboard, or into income.')}
     ${mi('onboard','list','List your yacht','Get a verified passport and three-signal tracking.')}
@@ -2451,6 +2563,7 @@ $('#siForm').addEventListener('submit',async e=>{e.preventDefault();const email=
   toast('Signed in as '+u.name+'.');let next=afterSignIn||(u.role==='admin'?'admin':'account');if(ADMIN_V.includes(next)&&u.role!=='admin')next='account';afterSignIn=null;location.hash=next;renderNav();
 });
 $('#suForm').addEventListener('submit',async e=>{e.preventDefault();const name=$('#suName').value.trim(),email=$('#suEmail').value.trim().toLowerCase(),pw=$('#suPw').value;const err=$('#suErr');
+  err.textContent='GYT accounts are for yacht owners and people they invite. Use the sign-up steps above.';return;
   if(name.length<2){err.textContent='Enter your full name.';return}
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){err.textContent='Enter a valid email address.';return}
   const probs=[];if(pw.length<8)probs.push('at least 8 characters');if(!/\d/.test(pw))probs.push('a number');if(!/[a-z]/i.test(pw))probs.push('a letter');
@@ -3093,48 +3206,78 @@ document.addEventListener('change',e=>{if(e.target.id==='obFiles'&&e.target.file
 $('#wPane').addEventListener('click',e=>{if(e.target.id!=='obMint')return;const before=OB.minted;setTimeout(async function wait(){if(!OB.minted||OB.minted===before){return setTimeout(wait,120)}const u=me();OWNED[OB.minted.id]=u.email;store.set('gyt-owned',OWNED);
   if(OBP.length){const y=YACHTS.find(v=>v.id===OB.minted.id);PHOTOS[y.id]=[];for(const[i,p]of OBP.entries()){const h=await sha(p.url);PHOTOS[y.id].push({id:h.slice(0,10),url:p.url,caption:p.caption,cover:i===0,sha:h,at:Date.now()});await emit(y,'PHOTO_ADDED',{doc:h})}savePhotos();toast(`${OBP.length} photo${OBP.length>1?'s':''} attached to ${y.name}.`);OBP=[]}},150)});
 
-/* ---------- sign-up wizard ---------- */
-const WZ={step:0,dir:1,f:{name:'',email:'',pw:'',terms:false,phone:'',country:'',interests:[],follow:[]},touched:false,done:null};
+/* ---------- sign-up wizard (owners with yacht proof, or invited people) ---------- */
+const WZ0=()=>({name:'',email:'',pw:'',terms:false,phone:'',country:'',interests:[],follow:[],join:'',code:'',vName:'',vFlag:'',vLoa:'',vMmsi:'',vImo:'',vReg:'',doc:null});
+const WZ={step:0,dir:1,f:WZ0(),touched:false,done:null};
 const emailOk=e=>/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e.trim());
-function wzProblems(){const f=WZ.f;return{name:f.name.trim().length<2?'Enter your full name':'',email:!emailOk(f.email)?'Enter a valid email address':ACCOUNTS.some(a=>a.email===f.email.trim().toLowerCase())?'An account with this email already exists. Sign in instead.':'',pw:pwChecks(f.pw).some(c=>!c[0])?'Password needs 8+ characters with a letter and a number':'',terms:!f.terms?'Please accept the terms to continue':'',phone:f.phone&&!/^\+?[0-9 ()-]{6,30}$/.test(f.phone.trim())?'Use digits, spaces and an optional +':''}}
-function readWz(){const g=id=>document.getElementById(id);if(g('wzName'))Object.assign(WZ.f,{name:g('wzName').value,email:g('wzEmail').value,pw:g('wzPw').value,terms:g('wzTerms').checked});if(g('wzCountry'))Object.assign(WZ.f,{country:g('wzCountry').value,phone:g('wzPhone').value})}
-function renderWz(){const box=$('#suWizard');if(!box)return;const f=WZ.f,s=WZ.step,P=wzProblems(),T=WZ.touched;const STEPS=['Account','About you','Follow yachts','Done'];
-  const err=k=>T&&P[k]?`<span class="ferr">${P[k]}</span>`:'';let body='';
-  if(s===0)body=`<div><div class="eyebrow">Step 1 of 3 · Free</div><h1>Create your account</h1><p class="muted small">Browse, track and verify straight away. An admin approves new accounts before bookings and investments open.</p></div>
-   <label class="f" for="wzName">Full name<input id="wzName" autocomplete="name" value="${esc(f.name)}" ${T&&P.name?'aria-invalid="true"':''}>${err('name')}</label>
-   <label class="f" for="wzEmail">Email<input id="wzEmail" type="email" inputmode="email" autocomplete="email" value="${esc(f.email)}" ${T&&P.email?'aria-invalid="true"':''}>${err('email')}</label>
+// Maritime Identification Digits for common yacht flags (abridged ITU list), and the IMO check digit
+const MIDS={KE:['634'],AE:['470','471'],MT:['215','229','248','249','256'],KY:['319'],MH:['538'],IT:['247'],TH:['567'],GB:['232','233','234','235'],US:['338','366','367','368','369'],FR:['226','227','228'],GR:['237','239','240','241'],MC:['254'],BS:['308','309','311'],PA:['351','352','353','354','355','356','357','370','371','372','373'],TZ:['674','677'],ZA:['601'],SC:['664'],NL:['244','245','246'],ES:['224','225'],TR:['271'],HR:['238'],CY:['209','210','212'],SA:['403'],QA:['466'],OM:['461']};
+const mmsiProblem=(m,flag)=>{if(!m)return'';if(!/^\d{9}$/.test(m))return'MMSI is 9 digits';const mid=m.slice(0,3);if(mid<'201'||mid>'775')return`MMSI starts with ${mid}, which is not a ship station country code`;const k=MIDS[flag];if(k&&!k.includes(mid))return`MMSI country code ${mid} does not match the flag`;return''};
+const imoProblem=i=>{const d=(i||'').toUpperCase().replace(/^IMO\s*/,'');if(!d)return'';if(!/^\d{7}$/.test(d))return'IMO number is 7 digits';let s=0;for(let k=0;k<6;k++)s+=+d[k]*(7-k);return s%10===+d[6]?'':'That IMO number\'s check digit is wrong'};
+const DEMO_INVITES={'GYT-CREW-2026':{role:'captain',yacht:'YACHT-000003',by:'the owner of Kilindini Star'},'GYT-INVS-2026':{role:'investor',yacht:null,by:'GYT'}};
+function wzProblems(){const f=WZ.f;const ow=f.join==='owner';return{name:f.name.trim().length<2?'Enter your full name':'',email:!emailOk(f.email)?'Enter a valid email address':ACCOUNTS.some(a=>a.email===f.email.trim().toLowerCase())?'An account with this email already exists. Sign in instead.':'',pw:pwChecks(f.pw).some(c=>!c[0])?'Password needs 8+ characters with a letter and a number':'',terms:!f.terms?'Please accept the terms to continue':'',
+  join:!f.join?'Choose how you\'re joining. GYT accounts are for yacht owners and people they invite.':'',
+  code:f.join==='invite'&&!DEMO_INVITES[f.code.trim().toUpperCase()]?(f.code.trim()?'That invite code is not valid':'Enter your invite code'):'',
+  vName:ow&&f.vName.trim().length<2?'Enter the yacht\'s name':'',vFlag:ow&&!f.vFlag?'Choose the flag':'',vLoa:ow&&!(+f.vLoa>3&&+f.vLoa<=200)?'Length in metres, e.g. 24.5':'',
+  vIds:ow&&!f.vMmsi.trim()&&!f.vImo.trim()?'Give the MMSI or IMO number (or both)':'',vMmsi:ow?mmsiProblem(f.vMmsi.trim(),f.vFlag):'',vImo:ow?imoProblem(f.vImo.trim()):'',vReg:ow&&f.vReg.trim().length<2?'Enter the registry or official number':'',doc:ow&&!f.doc?'Attach the certificate of registry':'',
+  phone:f.phone&&!/^\+?[0-9 ()-]{6,30}$/.test(f.phone.trim())?'Use digits, spaces and an optional +':''}}
+function readWz(){const g=id=>document.getElementById(id);if(g('wzName'))Object.assign(WZ.f,{name:g('wzName').value,email:g('wzEmail').value,pw:g('wzPw').value,terms:g('wzTerms').checked});
+  if(g('wzCountry'))Object.assign(WZ.f,{country:g('wzCountry').value,phone:g('wzPhone').value});
+  if(g('wzCode'))WZ.f.code=g('wzCode').value;
+  if(g('wzVName'))Object.assign(WZ.f,{vName:g('wzVName').value,vFlag:g('wzVFlag').value,vLoa:g('wzVLoa').value,vMmsi:g('wzVMmsi').value,vImo:g('wzVImo').value,vReg:g('wzVReg').value})}
+function renderWz(){const box=$('#suWizard');if(!box)return;const f=WZ.f,s=WZ.step,P=wzProblems(),T=WZ.touched;const STEPS=['Account','Your yacht','About you','Done'];
+  const err=k=>T&&P[k]?`<span class="ferr">${P[k]}</span>`:'';const inv=k=>T&&P[k]?'aria-invalid="true"':'';let body='';
+  if(s===0)body=`<div><div class="eyebrow">Step 1 of 3</div><h1>Create your account</h1><p class="muted small">GYT accounts are for yacht owners and the people they invite. Anyone can browse yachts, the map and records without one.</p></div>
+   <label class="f" for="wzName">Full name<input id="wzName" autocomplete="name" value="${esc(f.name)}" ${inv('name')}>${err('name')}</label>
+   <label class="f" for="wzEmail">Email<input id="wzEmail" type="email" inputmode="email" autocomplete="email" value="${esc(f.email)}" ${inv('email')}>${err('email')}</label>
    ${pwField('wzPw','Password',true)}
    <label class="row small check-row" for="wzTerms"><input id="wzTerms" type="checkbox" ${f.terms?'checked':''} style="width:auto"> I agree to the terms and understand GYT is not a flag registry or investment advice.</label>${err('terms')}`;
-  if(s===1)body=`<div><div class="eyebrow">Step 2 of 3 · Optional</div><h1>What brings you here?</h1><p class="muted small">Pick any that fit. This sets up your dashboard; change it later in Settings.</p></div>
-   <div class="pickgrid">${INTERESTS.map(([k,t,d,i])=>`<button type="button" class="pick" data-int="${k}" aria-pressed="${f.interests.includes(k)}"><span class="pk-i" aria-hidden="true">${i}</span><b>${t}</b><span>${d}</span><span class="pk-tick" aria-hidden="true">✓</span></button>`).join('')}</div>
+  if(s===1)body=`<div><div class="eyebrow">Step 2 of 3</div><h1>How are you joining?</h1><p class="muted small">This keeps GYT to people with a real connection to a yacht.</p></div>
+   <div class="pickgrid two"><button type="button" class="pick" data-join="owner" aria-pressed="${f.join==='owner'}"><span class="pk-i" aria-hidden="true">⛵</span><b>I own a yacht</b><span>Give its details and certificate of registry. We check them before your account opens.</span><span class="pk-tick" aria-hidden="true">✓</span></button>
+   <button type="button" class="pick" data-join="invite" aria-pressed="${f.join==='invite'}"><span class="pk-i" aria-hidden="true">✉</span><b>I have an invite</b><span>From a yacht owner (captain, crew) or from GYT (investors, marinas).</span><span class="pk-tick" aria-hidden="true">✓</span></button></div>${err('join')}
+   ${f.join==='invite'?`<label class="f" for="wzCode">Invite code<input id="wzCode" class="mono" placeholder="GYT-ABCD-EF23" value="${esc(f.code)}" ${inv('code')}>${err('code')}<span class="small muted">Preview codes: GYT-CREW-2026 (captain of Kilindini Star) or GYT-INVS-2026 (investor).</span></label>`:''}
+   ${f.join==='owner'?`<div class="form2"><label class="f" for="wzVName">Yacht name<input id="wzVName" value="${esc(f.vName)}" ${inv('vName')}>${err('vName')}</label>
+    <label class="f" for="wzVFlag">Flag<select id="wzVFlag" ${inv('vFlag')}><option value="">Choose…</option>${COUNTRIES.map(([c,n])=>`<option value="${c}"${c===f.vFlag?' selected':''}>${n}</option>`).join('')}</select>${err('vFlag')}</label>
+    <label class="f" for="wzVLoa">Length overall (m)<input id="wzVLoa" inputmode="decimal" value="${esc(f.vLoa)}" ${inv('vLoa')}>${err('vLoa')}</label>
+    <label class="f" for="wzVReg">Registry / official number<input id="wzVReg" value="${esc(f.vReg)}" ${inv('vReg')}>${err('vReg')}</label>
+    <label class="f" for="wzVMmsi">MMSI (9 digits)<input id="wzVMmsi" class="mono" inputmode="numeric" value="${esc(f.vMmsi)}" ${inv('vMmsi')}>${err('vMmsi')}</label>
+    <label class="f" for="wzVImo">IMO number (if it has one)<input id="wzVImo" class="mono" inputmode="numeric" value="${esc(f.vImo)}" ${inv('vImo')}>${err('vImo')}</label>
+    ${T&&P.vIds?`<span class="ferr" style="grid-column:1/-1">${P.vIds}</span>`:''}
+    <label class="f filepick" for="wzDoc" style="grid-column:1/-1">Certificate of registry (PDF or photo)<input id="wzDoc" type="file" accept="application/pdf,image/jpeg,image/png,image/webp">${f.doc?`<span class="small muted">${esc(f.doc.name)} · #${f.doc.sha.slice(0,10)} (fingerprinted in your browser)</span>`:''}${err('doc')}</label>
+    <p class="hint small" style="grid-column:1/-1">Our autopilot checks the MMSI and IMO, makes sure no one else has claimed this yacht, and reads the certificate. An admin then opens your account.</p></div>`:''}`;
+  if(s===2)body=`<div><div class="eyebrow">Step 3 of 3 · Optional</div><h1>What do you want to do on GYT?</h1><p class="muted small">Pick any that fit. This sets up your dashboard.</p></div>
+   <div class="pickgrid">${INTERESTS.filter(x=>x[0]!=='track').map(([k,t,d,i])=>`<button type="button" class="pick" data-int="${k}" aria-pressed="${f.interests.includes(k)}"><span class="pk-i" aria-hidden="true">${i}</span><b>${t}</b><span>${d}</span><span class="pk-tick" aria-hidden="true">✓</span></button>`).join('')}</div>
    <div class="form2"><label class="f" for="wzCountry">Country of residence<select id="wzCountry"><option value="">Choose…</option>${COUNTRIES.map(([c,n])=>`<option value="${c}"${c===f.country?' selected':''}>${n}</option>`).join('')}</select></label>
-   <label class="f" for="wzPhone">Mobile (for booking alerts)<input id="wzPhone" type="tel" inputmode="tel" placeholder="+254 700 000000" value="${esc(f.phone)}">${err('phone')}</label></div>
-   ${f.interests.includes('invest')?'<p class="hint small">Investing needs an eligibility check through a licensed partner. You can start it from your dashboard after sign-up.</p>':''}`;
-  if(s===2)body=`<div class="row" style="justify-content:space-between;align-items:flex-end"><div><div class="eyebrow">Step 3 of 3 · Optional</div><h1>Follow a few yachts</h1><p class="muted small">Followed yachts appear on your dashboard with live position, records and alerts.</p></div><button type="button" class="sm" id="wzAll">${f.follow.length===minted().length?'Clear all':'Follow all'}</button></div>
-   <div class="followgrid">${minted().map(y=>{const on=f.follow.includes(y.id);const p=y.tokenized&&y.units?y.value/y.units:null;return `<button type="button" class="fpick" data-fy="${y.id}" aria-pressed="${on}"><img src="${IMGOF(y.id)}" alt="" ${FALL}><span class="fp-b"><b>${esc(y.name)}</b><span>${y.loa} m · ${esc(M[y.home].name)}</span>${p?`<span class="fp-u">1 unit ≈ ${usd0(p)}</span>`:'<span class="fp-u muted">No units issued</span>'}</span><span class="fp-tick" aria-hidden="true">${on?'✓':'+'}</span></button>`}).join('')}</div>`;
+   <label class="f" for="wzPhone">Mobile (for booking alerts)<input id="wzPhone" type="tel" inputmode="tel" placeholder="+254 700 000000" value="${esc(f.phone)}">${err('phone')}</label></div>`;
   if(s===3){const d=WZ.done;const dest=d.dest;body=`<div class="wz-done"><div class="burst" aria-hidden="true">${Array.from({length:14},(_,i)=>`<i style="--a:${i*25.7}deg"></i>`).join('')}<span>✓</span></div><h1>Welcome aboard, ${esc(d.first)}</h1>
-   <ul class="checklist"><li class="ok">Account created</li><li class="${d.follows?'ok':''}">${d.follows?`Following ${d.follows} yacht${d.follows>1?'s':''}`:'Follow yachts from any passport'}</li><li class="wait">Admin approval for bookings and investments (you can browse and track now)</li>${d.interests.includes('invest')?'<li>Start your investor eligibility check</li>':''}${d.interests.includes('own')?'<li>List your yacht and upload its photos</li>':''}</ul>
-   <div class="row" style="justify-content:center"><a class="btn primary lg" href="#${dest}">${dest==='account'?'Go to My GYT →':'Continue where you were →'}</a>${dest!=='account'?'<a class="btn lg" href="#account">My GYT</a>':''}<a class="btn lg" href="#explore">Explore yachts</a></div></div>`}
+   <ul class="checklist"><li class="ok">Account created</li>${d.join==='invite'?`<li class="ok">Invite accepted from ${esc(d.by)}: your account is open</li>`:'<li class="ok">Certificate of registry received</li>'}${(d.checks||[]).map(c=>`<li class="${c.ok?'ok':'wait'}">${esc(c.msg)}</li>`).join('')}${d.status!=='active'?'<li class="wait">An admin opens your account once the checks are done. You can browse and track now.</li>':''}</ul>
+   <div class="row" style="justify-content:center"><a class="btn primary lg" href="#${dest}">${dest==='account'?'Go to My GYT →':'Continue where you were →'}</a><a class="btn lg" href="#explore">Explore yachts</a></div></div>`}
   box.innerHTML=`<div class="wizard panel"><ol class="wz-steps" aria-label="Sign-up progress">${STEPS.map((t,i)=>`<li class="${i<s?'done':i===s?'on':''}" ${i===s?'aria-current="step"':''}><span class="d">${i<s?'✓':i+1}</span><span class="l">${t}</span></li>`).join('')}<span class="wz-bar" aria-hidden="true"><i style="width:${s/3*100}%"></i></span></ol>
    <div class="wz-body dir${WZ.dir}">${body}</div><p class="err" id="wzErr" role="alert"></p>
-   ${s<3?`<div class="wz-nav">${s?'<button type="button" data-wz="back">← Back</button>':'<span class="small muted">Already have an account? <a href="#signin">Sign in</a></span>'}<span class="row" style="gap:8px">${s===1?'<button type="button" class="ghost" data-wz="skip">Skip</button>':''}${s<2?'<button type="button" class="primary" data-wz="next">Continue →</button>':`<button type="button" class="primary" data-wz="create">Create account${f.follow.length?' · follow '+f.follow.length:''}</button>`}</span></div>`:''}</div>`;
+   ${s<3?`<div class="wz-nav">${s?'<button type="button" data-wz="back">← Back</button>':'<span class="small muted">Already have an account? <a href="#signin">Sign in</a></span>'}<span class="row" style="gap:8px">${s===2?'<button type="button" class="ghost" data-wz="create">Skip</button>':''}${s<2?'<button type="button" class="primary" data-wz="next">Continue →</button>':`<button type="button" class="primary" data-wz="create">Create account</button>`}</span></div>`:''}</div>`;
   if(s===0){const p=$('#wzPw');p.value=f.pw;const m=document.getElementById('wzPw-m');if(m)m.outerHTML=pwMeter('wzPw',f.pw)}
-  const first=box.querySelector('.wz-body input,.wz-body .pick,.wz-body .fpick');if(first&&s<3&&!WZ.noFocus)first.focus({preventScroll:true});WZ.noFocus=false;
+  const first=box.querySelector('.wz-body input,.wz-body .pick');if(first&&s<3&&!WZ.noFocus)first.focus({preventScroll:true});WZ.noFocus=false;
 }
+function wzChecks(f){const out=[];const flagName=(COUNTRIES.find(c=>c[0]===f.vFlag)||[0,f.vFlag])[1];
+  if(f.vMmsi)out.push({key:'mmsi',ok:!mmsiProblem(f.vMmsi,f.vFlag),msg:mmsiProblem(f.vMmsi,f.vFlag)||`MMSI ${f.vMmsi} is valid for ${flagName}`});
+  if(f.vImo)out.push({key:'imo',ok:!imoProblem(f.vImo),msg:imoProblem(f.vImo)||`IMO ${f.vImo} check digit is valid`});
+  const dup=YACHTS.find(y=>y.mmsi&&y.mmsi===f.vMmsi);out.push({key:'unique',ok:!dup,msg:dup?`MMSI already belongs to ${dup.name} (${dup.id})`:'No other account or yacht uses these numbers'});
+  out.push({key:'doc',ok:!!f.doc,msg:f.doc?`Registry document received (#${f.doc.sha.slice(0,10)})`:'No registry document'});return out}
+document.addEventListener('change',async e=>{if(e.target.id!=='wzDoc'||!e.target.files.length)return;readWz();const file=e.target.files[0];const buf=await file.arrayBuffer();const h=[...new Uint8Array(await crypto.subtle.digest('SHA-256',buf))].map(b=>b.toString(16).padStart(2,'0')).join('');WZ.f.doc={name:file.name,sha:h,size:file.size};WZ.noFocus=true;renderWz()});
 document.addEventListener('click',async e=>{if(!e.target.closest('#suWizard'))return;
+  const jn=e.target.closest('[data-join]');if(jn){readWz();WZ.f.join=jn.dataset.join;WZ.touched=false;WZ.noFocus=true;renderWz();return}
   const pk=e.target.closest('[data-int]');if(pk){readWz();const k=pk.dataset.int,l=WZ.f.interests;WZ.f.interests=l.includes(k)?l.filter(x=>x!==k):[...l,k];WZ.noFocus=true;renderWz();return}
-  const fy=e.target.closest('[data-fy]');if(fy){const k=fy.dataset.fy,l=WZ.f.follow;WZ.f.follow=l.includes(k)?l.filter(x=>x!==k):[...l,k];WZ.noFocus=true;const sy=scrollY;renderWz();scrollTo(0,sy);return}
-  if(e.target.id==='wzAll'){WZ.f.follow=WZ.f.follow.length===minted().length?[]:minted().map(y=>y.id);WZ.noFocus=true;renderWz();return}
   const a=e.target.closest('[data-wz]');if(!a)return;readWz();const P=wzProblems();
   if(a.dataset.wz==='back'){WZ.dir=-1;WZ.step--;WZ.touched=false;return renderWz()}
-  if(a.dataset.wz==='skip'){WZ.dir=1;WZ.step++;return renderWz()}
-  if(a.dataset.wz==='next'){const bad=WZ.step===0?(P.name||P.email||P.pw||P.terms):WZ.step===1?P.phone:'';if(bad){WZ.touched=true;WZ.noFocus=true;return renderWz()}WZ.touched=false;WZ.dir=1;WZ.step++;return renderWz()}
-  if(a.dataset.wz==='create'){const f=WZ.f;const email=f.email.trim().toLowerCase();if(ACCOUNTS.some(x=>x.email===email)){WZ.step=0;WZ.touched=true;return renderWz()}
-    a.disabled=true;a.textContent='Creating your account…';const id=Math.max(...ACCOUNTS.map(x=>x.id))+1;
-    ACCOUNTS.push({id,name:f.name.trim(),email,pw:await pwHash(email,f.pw),role:'client',status:'pending',inv:null,wallet:null,joined:new Date().toISOString().slice(0,10),phone:f.phone.trim()||null,country:f.country||null,interests:[...f.interests],follows:[...f.follow],notify:{arrivals:true,ais_gaps:true,documents:true,bookings:true,payouts:true,weekly:false}});saveAccounts();
+  if(a.dataset.wz==='next'){const keys=WZ.step===0?['name','email','pw','terms']:['join','code','vName','vFlag','vLoa','vIds','vMmsi','vImo','vReg','doc'];const bad=keys.some(k=>P[k]);if(bad){WZ.touched=true;WZ.noFocus=true;return renderWz()}WZ.touched=false;WZ.dir=1;WZ.step++;return renderWz()}
+  if(a.dataset.wz==='create'){const f=WZ.f;const email=f.email.trim().toLowerCase();if(P.phone){WZ.touched=true;return renderWz()}if(ACCOUNTS.some(x=>x.email===email)){WZ.step=0;WZ.touched=true;return renderWz()}
+    a.disabled=true;a.textContent='Creating your account…';const id=Math.max(...ACCOUNTS.map(x=>x.id))+1;const invite=f.join==='invite'?DEMO_INVITES[f.code.trim().toUpperCase()]:null;
+    const checks=f.join==='owner'?wzChecks(f):[];const status=invite?'active':'pending';
+    ACCOUNTS.push({id,name:f.name.trim(),email,pw:await pwHash(email,f.pw),role:'client',status,inv:null,wallet:null,joined:new Date().toISOString().slice(0,10),phone:f.phone.trim()||null,country:f.country||null,interests:[...f.interests],follows:invite&&invite.yacht?[invite.yacht]:[],notify:{arrivals:true,ais_gaps:true,documents:true,bookings:true,payouts:true,weekly:false},
+      joined_via:f.join,claim:f.join==='owner'?{vessel:f.vName.trim(),flag:f.vFlag,loa:+f.vLoa,mmsi:f.vMmsi.trim(),imo:f.vImo.trim(),reg:f.vReg.trim(),doc:f.doc,checks}:null,crewOf:invite&&invite.yacht||null});saveAccounts();
+    window.gytAutopilotLog&&gytAutopilotLog('registrations',f.join==='owner'?(checks.every(c=>c.ok)?'recommend_approve':'needs_review'):'done',f.join==='owner'?`${f.name.trim()} (${f.vName.trim()}): ${checks.every(c=>c.ok)?'every check passed, recommend approval':'needs review: '+checks.filter(c=>!c.ok).map(c=>c.msg).join('; ')}`:`${f.name.trim()} joined with an invite from ${invite.by}`);
     session={email};store.set('gyt-session',session);const dest=afterSignIn&&!ADMIN_V.includes(afterSignIn)&&afterSignIn!=='signup'?afterSignIn:'account';afterSignIn=null;
-    WZ.done={first:f.name.trim().split(' ')[0],follows:f.follow.length,interests:[...f.interests],dest};WZ.dir=1;WZ.step=3;renderWz();renderNav();
-    WZ.f={name:'',email:'',pw:'',terms:false,phone:'',country:'',interests:[],follow:[]}}});
+    WZ.done={first:f.name.trim().split(' ')[0],join:f.join,by:invite&&invite.by,checks,status,dest};WZ.dir=1;WZ.step=3;renderWz();renderNav();WZ.f=WZ0()}});
 document.addEventListener('keydown',e=>{if(e.key!=='Enter'||!e.target.closest('#suWizard')||e.target.tagName!=='INPUT'||e.target.type==='checkbox')return;e.preventDefault();const n=$('#suWizard [data-wz="next"]');n&&n.click()});
 
 /* ---------- feature previews for signed-out visitors ---------- */
@@ -3155,6 +3298,9 @@ const FEAT={
 FEAT.device={eyebrow:'Track from your phone',title:'No tracker on board? Your phone is enough.',img:'YACHT-000005-a',lede:'Owners and their captains can share a phone\'s or laptop\'s location as the yacht\'s position, straight from the browser. Nothing to install or fit.',time:'Free · works in any modern browser',
   perks:[['⌖','Phone becomes the tracker','Press Start aboard; the yacht moves on the GYT map as you do.'],['⇅','Works with patchy signal','Fixes are saved on the device at sea and sent when you\'re back in range.'],['👥','Share with your captain','Owners add crew by email so they can track from their own phone.'],['#','Recorded and labelled','Every session is a hashed event; positions are marked as phone fixes.']],
   steps:[['Create a free account','Name, email and a password.'],['List your yacht, or be added as crew','Owners list the yacht; captains are added by the owner.'],['Open Track from this device','Press Start and keep the page open.']],demo:'live'};
+FEAT.berths={eyebrow:'Find a berth',title:'The right berth for your yacht, held the moment you pick it.',img:'YACHT-000001-a',lede:'See every berth at a marina drawn to scale against your yacht. Hold the one you want and every other yacht sees it\'s taken, instantly. Pay into escrow; the marina is paid when your arrival is proven.',time:'For yacht owners and their crew',
+  perks:[['⇔','Sized to your yacht','Length, beam and draft are checked. You\'re never offered a berth you don\'t fit.'],['★','Best fit first','The smallest berth that fits, so big berths stay free for big yachts.'],['⏱','Live holds','Pick a berth and it\'s held for you; others see it as taken straight away.'],['⛨','Escrowed payment','Your money waits in escrow until three signals prove you arrived.']],
+  steps:[['Join as an owner or crew','Owners show their yacht\'s papers; crew are invited.'],['Pick dates and a marina','Every berth shows whether you fit.'],['Hold, then confirm','Your hold blocks others while you pay into escrow.']],demo:'live'};
 FEAT.settings=FEAT.account;
 let introKey=null;
 function liveRows(){return minted().slice(0,6).map(y=>`<div class="row"><span><span class="dot on" aria-hidden="true"></span> <b>${esc(y.name)}</b> <span class="muted small">· ${y.status==='underway'?'underway to '+esc(M[y.to].name.split(',')[0]):'at '+esc(M[y.home].name.split(',')[0])}</span></span><span class="mono small muted">${y.lat.toFixed(3)}°, ${y.lon.toFixed(3)}°${y.lastHash?' · #'+y.lastHash.slice(0,8):''}</span></div>`).join('')}
@@ -3363,6 +3509,164 @@ function v6route(n=0){const v=(location.hash||'#home').slice(1);if(v!=='map'&&v!
   if(v==='map')needL(()=>{initOsm();setTimeout(()=>osm.invalidateSize(),0);osmFitted=false;updateOsm();renderOsmList()});
   else renderDev()}
 addEventListener('hashchange',()=>setTimeout(v6route,0));setTimeout(v6route,0);
+})();
+</script>
+<script>
+/* ---------- v7: berths sized to the yacht, live holds, admin berth board, autopilot ---------- */
+(function(){
+const DXB='MARINA-DXB-001';
+// more berths at Dubai Harbour, so the pontoon has every size
+[['MARINA-DXB-001','C214',20,5.5,410,'Shore power 32A, water'],['MARINA-DXB-001','B130',30,7.2,690,'Shore power 63A, water, fuel'],['MARINA-DXB-001','B132',40,8.8,1100,'Shore power 125A, fuel'],
+ ['MARINA-DXB-001','A044',50,10.5,1600,'Shore power 250A, fuel, security'],['MARINA-DXB-001','A050',75,14,3200,'Shore power 400A, fuel, crew quarters']]
+ .forEach(b=>{if(!BERTHS.some(x=>x.marina===b[0]&&x.berth===b[1]))BERTHS.push({marina:b[0],berth:b[1],loa:b[2],beam:b[3],rate:b[4],svc:b[5]})});
+BERTHS.forEach(b=>{if(b.depth==null)b.depth=Math.round((2+b.loa*0.06)*10)/10});
+YACHTS.forEach(y=>{if(y.draft==null)y.draft=Math.round(y.loa*0.075*10)/10});
+const HOLD_MIN=10;
+const key=b=>b.marina+'|'+b.berth;
+const ST={holds:[],booked:{},seq:1};// holds: {id,k,yid|null,loa,label,exp,mine}
+// what is already in the marina (sample): occupied and booked berths, including one booking that no longer fits
+const yb=id=>YACHTS.find(y=>y.id===id);
+ST.booked[DXB+'|B128']={yid:'YACHT-000001',ref:'BK-4099',status:'occupied'};
+ST.booked[DXB+'|A040']={yid:'YACHT-000007',ref:'BK-4102',status:'booked'};
+ST.booked[DXB+'|A044']={yid:'YACHT-000004',ref:'BK-4105',status:'booked'};// 55 m yacht in a 50 m berth: the autopilot catches it
+const fit=(y,b)=>{const r=[];if(y.loa>b.loa)r.push(`${y.loa} m long; berth takes up to ${b.loa} m`);if(y.beam>b.beam)r.push(`${y.beam} m beam; berth takes up to ${b.beam} m`);if(y.draft&&b.depth&&y.draft>b.depth)r.push(`draws ${y.draft} m; berth depth ${b.depth} m`);const spare=Math.round((b.loa-y.loa)*10)/10;return{ok:!r.length,reasons:r,spare,snug:!r.length&&spare<1}};
+const activeHold=k=>{const now=Date.now();ST.holds=ST.holds.filter(h=>h.exp>now||(h.expired=true,APL('holds','done',`Released the hold on berth ${h.k.split('|')[1]}: it ran out without a booking. The berth is open again.`),false));return ST.holds.find(h=>h.k===k)};
+const left=t=>{const s=Math.max(0,Math.round((t-Date.now())/1000));return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`};
+const iso=d=>new Date(d).toISOString().slice(0,10);
+let Q=null,selB=null,lastSig='',prevStates={};
+
+/* ---- autopilot log ---- */
+const APLOG=[];let apSeq=1;
+function APL(job,outcome,summary,ai){APLOG.unshift({id:apSeq++,at:Date.now(),job,outcome,summary,ai:!!ai,resolved:false});if(!$('#v-auto').hidden)renderAuto();if(!$('#v-bboard').hidden)renderBoard()}
+window.gytAutopilotLog=(j,o,s,ai)=>APL(j,o,s,ai);
+
+/* ---- find a berth ---- */
+function myYachts(){const u=me();const OWN=store.get('gyt-owned',{});const own=minted().filter(y=>OWN[y.id]===(u&&u.email)||u&&u.crewOf===y.id);return own.length?[...own,...minted().filter(y=>!own.includes(y))]:minted()}
+function initQ(){if(Q)return;const t=new Date(Date.now()+14*864e5);Q={yid:'YACHT-000003',marina:DXB,arr:iso(t),dep:iso(+t+3*864e5)};
+  $('#bfMarina').innerHTML=[...new Set(BERTHS.map(b=>b.marina))].map(m=>`<option value="${m}">${esc(M[m].name)}</option>`).join('');
+  $('#bbMarina').innerHTML=$('#bfMarina').innerHTML}
+function view(){const y=yb(Q.yid);const nights=Math.max(1,Math.round((new Date(Q.dep)-new Date(Q.arr))/864e5));
+  const list=BERTHS.filter(b=>b.marina===Q.marina).sort((a,b)=>a.loa-b.loa||a.berth.localeCompare(b.berth)).map(b=>{const k=key(b),f=fit(y,b),h=activeHold(k),bk=ST.booked[k];
+    let state=bk?(bk.yid===y.id?'booked_by_you':'booked'):h?(h.mine&&h.yid===y.id?'held_by_you':'held'):!f.ok?'too_small':'available';return{b,k,f,h,bk,state,total:b.rate*nights}});
+  const free=list.filter(x=>x.state==='available');if(free.length){const best=free.reduce((a,c)=>c.f.spare<a.f.spare||(c.f.spare===a.f.spare&&c.b.rate<a.b.rate)?c:a);best.best=true}
+  return{y,nights,list}}
+const LABEL={available:'Free',too_small:'Too small',held:'Held by another yacht',held_by_you:'Held for you',booked:'Booked',booked_by_you:'Booked by you'};
+window.renderBerths=function(force){if($('#v-berths').hidden)return;initQ();
+  const sel=$('#bfYacht');if(!sel.options.length||force){sel.innerHTML=myYachts().map(y=>`<option value="${y.id}">${esc(y.name)} · ${y.loa} m</option>`).join('');}
+  sel.value=Q.yid;$('#bfMarina').value=Q.marina;$('#bfArr').value=Q.arr;$('#bfDep').value=Q.dep;
+  const V=view();
+  // tell the owner when a berth they could have had is taken by someone else
+  V.list.forEach(x=>{const was=prevStates[x.k];if(was==='available'&&x.state==='held'&&!x.h.mine){note(false,`Berth ${x.b.berth} was just taken by another yacht (${x.h.loa} m). The autopilot moved your pick to the next best fit.`);if(selB===x.k)selB=null}prevStates[x.k]=x.state});
+  const sig=JSON.stringify([Q,selB,V.list.map(x=>[x.k,x.state,x.best])]);if(sig===lastSig&&!force){tick();return}lastSig=sig;
+  if(selB==null||!V.list.some(x=>x.k===selB)){const d=V.list.find(x=>x.state==='held_by_you')||V.list.find(x=>x.best);selB=d?d.k:null}
+  $('#bfTitle').textContent=`${V.y.name}: ${V.y.loa} m × ${V.y.beam} m, draft ${V.y.draft} m`;
+  const best=V.list.find(x=>x.best);
+  $('#bfPick').hidden=!best;if(best)$('#bfPick').innerHTML=`<span class="ap-badge">Autopilot pick</span><div><b>Berth ${best.b.berth}</b> is the best fit for ${esc(V.y.name)}: ${best.f.spare} m to spare, ${full$(best.b.rate)}/day.<div class="small muted">The smallest free berth your yacht fits, so the big berths stay free for big yachts. Length, beam and draft all checked.</div></div>`;
+  // pontoon drawing to scale
+  const K=4.2,GAP=10,TOP=34;let x=14;const slips=V.list.map(it=>{const w=Math.max(40,it.b.beam*7),h=it.b.loa*K;const s={it,x,w,h};x+=w+GAP;return s});const W=x+6,H=TOP+Math.max(...slips.map(s=>s.h))+40;
+  const yl=V.y.loa*K;
+  $('#bfDraw').innerHTML=`<svg class="pontoon" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Berths drawn to scale"><rect x="0" y="6" width="${W}" height="20" rx="4" class="pt-deck"/><text x="10" y="20" class="pt-lbl">Pontoon</text>
+   ${slips.map(({it,x,w,h})=>{const cls=it.state==='available'?(it.best?'best':'free'):it.state.endsWith('you')?'mine':it.state==='too_small'?'small':it.state==='held'?'held':'booked';const on=selB===it.k;const yw=Math.min(w-6,V.y.beam*7);
+     return `<g class="slip ${cls} ${on?'on':''}" data-bk="${it.k}" tabindex="0" role="button" aria-label="Berth ${it.b.berth}, ${LABEL[it.state]}"><rect x="${x}" y="${TOP}" width="${w}" height="${h}" rx="3" class="sl-box"/>
+      ${on?`<path class="ghost ${it.f.ok?'':'bad'}" d="M${x+w/2} ${TOP+4} l${yw/2} ${yl*.18} v${yl*.72} q0 ${yl*.1} -${yw/2} ${yl*.1} q-${yw/2} 0 -${yw/2} -${yl*.1} v-${yl*.72} z"/>`:''}
+      ${it.bk&&!on?`<path class="moored" d="M${x+w/2} ${TOP+4} l${Math.min(w-8,yb(it.bk.yid).beam*7)/2} ${yb(it.bk.yid).loa*K*.18} v${yb(it.bk.yid).loa*K*.72} q0 ${yb(it.bk.yid).loa*K*.1} -${Math.min(w-8,yb(it.bk.yid).beam*7)/2} ${yb(it.bk.yid).loa*K*.1} q-${Math.min(w-8,yb(it.bk.yid).beam*7)/2} 0 -${Math.min(w-8,yb(it.bk.yid).beam*7)/2} -${yb(it.bk.yid).loa*K*.1} v-${yb(it.bk.yid).loa*K*.72} z"/>`:''}
+      <text x="${x+w/2}" y="${TOP+h+14}" class="sl-code">${it.b.berth}</text><text x="${x+w/2}" y="${TOP+h+27}" class="sl-size">${it.b.loa} m</text>
+      ${it.best?`<text x="${x+w/2}" y="${TOP-4}" class="sl-star">★</text>`:''}${it.h?`<text x="${x+w/2}" y="${TOP+16}" class="sl-clock" data-exp="${it.h.exp}">${left(it.h.exp)}</text>`:''}</g>`}).join('')}</svg>`;
+  $('#bfGrid').innerHTML=V.list.map(it=>`<button type="button" class="bcard s-${it.state} ${it.best?'best':''} ${selB===it.k?'on':''}" data-bk="${it.k}"><span class="row" style="justify-content:space-between"><b>Berth ${it.b.berth}</b><span class="pill ${it.state==='available'?'ok':it.state==='held'||it.state==='too_small'?'warn':it.state.endsWith('you')?'info':''}">${it.best?'★ Best fit':LABEL[it.state]}</span></span>
+    <span class="small muted">Up to ${it.b.loa} m × ${it.b.beam} m, ${it.b.depth} m deep</span><span class="small">${it.f.ok?(it.f.snug?`Snug: ${it.f.spare} m to spare`:`${it.f.spare} m to spare`):it.f.reasons[0]}</span>
+    ${it.state==='held'?`<span class="small warn-t">Held by another yacht (${it.h.loa} m) · frees in <span data-exp="${it.h.exp}">${left(it.h.exp)}</span> unless they book</span>`:''}
+    <span class="mono small">${full$(it.b.rate)}/day · ${full$(it.total)} for ${V.nights} night${V.nights>1?'s':''}</span></button>`).join('');
+  const c=V.list.find(x=>x.k===selB);const act=$('#bfAct');act.hidden=!c;if(c){
+    act.innerHTML=`<div><b>Berth ${c.b.berth}</b> <span class="muted small">· ${LABEL[c.state]}</span><div class="small muted">${esc(c.b.svc)}</div></div>`+
+     (c.state==='available'?`<button class="primary lg" data-bfa="hold">Hold berth ${c.b.berth} for ${HOLD_MIN} min</button>`:
+      c.state==='held_by_you'?`<div class="row"><span class="small">Held for you · <b class="mono" data-exp="${c.h.exp}">${left(c.h.exp)}</b> left</span><button class="primary lg" data-bfa="confirm">Confirm and pay ${full$(c.total)} into escrow</button><button data-bfa="release">Release</button></div>`:
+      c.state==='held'?`<span class="small">Another yacht found this berth first. ${best?`Try ${best.b.berth}, the best free fit.`:''}</span>`:
+      c.state==='too_small'?`<span class="small">${esc(c.f.reasons.join('; '))}. GYT never offers a berth your yacht doesn&#39;t fit.</span>`:`<span class="small muted">Not available for these dates.</span>`)}
+};
+function tick(){document.querySelectorAll('#v-berths [data-exp],#v-bboard [data-exp]').forEach(e=>e.textContent=left(+e.dataset.exp))}
+function note(ok,t){const n=$('#bfNote');n.hidden=false;n.className='banner '+(ok?'ok':'warn');n.textContent=t;clearTimeout(note._t);note._t=setTimeout(()=>n.hidden=true,7000)}
+document.addEventListener('click',async e=>{const s=e.target.closest('#v-berths [data-bk]');if(s){selB=s.dataset.bk;lastSig='';renderBerths();return}
+  const a=e.target.closest('#v-berths [data-bfa]');if(!a)return;const V=view();const c=V.list.find(x=>x.k===selB);if(!c)return;
+  if(a.dataset.bfa==='hold'){if(!requireActive('Holding a berth'))return;
+    if(activeHold(c.k)){note(false,`Another yacht is holding berth ${c.b.berth}. Pick another berth.`);return}
+    ST.holds=ST.holds.filter(h=>!(h.mine&&h.yid===V.y.id));// one hold per yacht per marina
+    ST.holds.push({id:ST.seq++,k:c.k,yid:V.y.id,loa:V.y.loa,mine:true,exp:Date.now()+HOLD_MIN*60e3});await emit(V.y,'BERTH_HOLD',{marina:c.b.marina,berth:c.b.berth,doc:'hold-'+Date.now()});
+    note(true,`Berth ${c.b.berth} is held for ${V.y.name} for ${HOLD_MIN} minutes. Every other yacht now sees it as taken.`)}
+  if(a.dataset.bfa==='release'){ST.holds=ST.holds.filter(h=>h!==c.h);note(true,`Released berth ${c.b.berth}.`)}
+  if(a.dataset.bfa==='confirm'){const ref='BK-'+(4200+bookings.length);ST.holds=ST.holds.filter(h=>h!==c.h);ST.booked[c.k]={yid:V.y.id,ref,status:'booked'};
+    bookings.unshift({ref,y:V.y.name,m:M[c.b.marina].name,berth:c.b.berth,dates:Q.arr+' → '+Q.dep,v:c.total,st:'Deposit in escrow'});
+    await emit(V.y,'BERTH_RESERVE',{marina:c.b.marina,berth:c.b.berth,doc:ref});addEscrow({ref,kind:'Berth',y:V.y,marina:c.b.marina,berth:c.b.berth,amount:c.total,dates:Q.arr+' → '+Q.dep});renderBookings();
+    note(true,`Booked: berth ${c.b.berth}, ${ref}. ${full$(c.total)} waits in escrow and is released to the marina only when ${V.y.name}'s arrival is proven.`)}
+  lastSig='';renderBerths()});
+['bfYacht','bfMarina','bfArr','bfDep'].forEach(id=>$('#'+id).addEventListener('change',()=>{Q={yid:$('#bfYacht').value,marina:$('#bfMarina').value,arr:$('#bfArr').value,dep:$('#bfDep').value};selB=null;prevStates={};lastSig='';renderBerths()}));
+// other yachts are searching too (demo): every so often one holds a free berth that fits it
+const BOT=[16,19,22,26,29,33,38,44];
+window.gytBot=function(code,loa,marina=DXB){const b=BERTHS.find(x=>x.marina===marina&&x.berth===code);if(!b)return;const k=key(b);if(activeHold(k)||ST.booked[k])return;ST.holds.push({id:ST.seq++,k,yid:null,loa,mine:false,exp:Date.now()+HOLD_MIN*60e3});lastSig='';renderBerths();renderBoard()};
+setInterval(()=>{if(window.GYT_DEMO_NOBOTS)return;const free=BERTHS.filter(b=>b.marina===DXB&&!activeHold(key(b))&&!ST.booked[key(b)]);const loa=BOT[Math.floor(Math.random()*BOT.length)];const ok=free.filter(b=>b.loa>=loa);
+  if(ok.length&&Math.random()<.5){const b=ok.sort((a,c)=>a.loa-c.loa)[0];gytBot(b.berth,loa)}
+  ST.holds.filter(h=>!h.mine&&Math.random()<.15).forEach(h=>{h.exp=Date.now()-1})},9000);
+setInterval(()=>{if(!$('#v-berths').hidden)renderBerths();else tick();if(!$('#v-bboard').hidden)renderBoard()},1000);
+
+/* ---- admin: berth board ---- */
+let bbSig='';
+window.renderBoard=function(){if($('#v-bboard').hidden)return;initQ();const m=$('#bbMarina').value||DXB;const day=Date.now();
+  const rows=BERTHS.filter(b=>b.marina===m).sort((a,b)=>a.berth.localeCompare(b.berth)).map(b=>{const k=key(b),bk=ST.booked[k],h=activeHold(k);const y=bk&&yb(bk.yid);const f=y?fit(y,b):null;
+    const issues=[];if(f&&!f.ok)issues.push('Booked yacht does not fit: '+f.reasons.join('; '));else if(f&&f.snug)issues.push(`Snug fit: ${f.spare} m spare length`);
+    return{b,k,bk,h,y,issues,state:bk?(bk.status==='occupied'?'occupied':'booked'):h?'held':'free',use:y?Math.round(100*y.loa/b.loa):null}});
+  const c=s=>rows.filter(r=>r.state===s).length;
+  const sig=JSON.stringify(rows.map(r=>[r.k,r.state,r.issues,r.h&&r.h.id]))+APLOG.length;if(sig===bbSig){tick();return}bbSig=sig;
+  $('#bbKpi').innerHTML=[['Free',c('free')],['Held right now',c('held')],['Booked',c('booked')],['Occupied',c('occupied')]].map(([l,v])=>`<div class="panel kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`).join('');
+  $('#bbGrid').innerHTML=rows.map(r=>`<div class="bslot st-${r.state} ${r.issues.length&&r.issues[0].startsWith('Booked')?'has-issue':''}"><div class="row" style="justify-content:space-between"><b>${r.b.berth}</b><span class="small muted">${r.b.loa} × ${r.b.beam} m · ${r.b.depth} m deep</span></div>
+    <div class="bslot-meter" aria-hidden="true"><i style="width:${Math.min(100,r.use||0)}%;${r.use>100?'background:var(--crit)':''}"></i></div>
+    ${r.y?`<div class="small"><b>${esc(r.y.name)}</b> (${r.y.loa} m, ${r.use}% of the berth) · ${r.bk.status} · ${r.bk.ref}</div>`:''}
+    ${r.h?`<div class="small warn-t">Held by ${r.h.yid?esc(yb(r.h.yid).name):'another yacht'} (${r.h.loa} m) · <span data-exp="${r.h.exp}">${left(r.h.exp)}</span> left</div>`:''}
+    ${!r.y&&!r.h?`<div class="small muted">Free · ${full$(r.b.rate)}/day</div>`:''}${r.issues.map(i=>`<div class="small ${i.startsWith('Booked')?'crit-t':'warn-t'}">⚠ ${esc(i)}</div>`).join('')}</div>`).join('');
+  const fl=APLOG.filter(l=>!l.resolved&&(l.outcome==='flagged'));
+  $('#bbFlags').innerHTML=fl.length?fl.map(l=>`<li><span class="pill crit">flagged</span><span class="small muted">${JOBS[l.job]||l.job}${l.ai?' · AI':''}</span><span>${esc(l.summary)}</span><span class="small muted">${new Date(l.at).toLocaleTimeString()}</span></li>`).join(''):'<li class="small muted">Nothing needs a look. The autopilot checks fit, holds and arrivals on its own.</li>'};
+$('#bbMarina').addEventListener('change',()=>{bbSig='';renderBoard()});
+
+/* ---- admin: autopilot ---- */
+const JOBS={holds:'Berth holds',berth_fit:'Berth fit',arrivals:'Arrivals',registrations:'Sign-ups',brief:'AI brief'};
+const TONE={flagged:'crit',needs_review:'warn',recommend_approve:'ok',done:'ok',info:'info'};
+// sample owners waiting for approval
+const SAMPLE_REGS=[
+ {name:'Neema Otieno',email:'neema@example.com',vessel:'Watamu Breeze',flag:'Kenya',loa:26,mmsi:'634556677',imo:'9074729',reg:'KE-MSA-4410',checks:[[1,'MMSI 634556677 is valid for Kenya'],[1,'IMO 9074729 check digit is valid'],[1,'No other account or yacht uses these numbers'],[1,'Registry document received (#5685e2d63d)']],ai:'Certificate matches: name, flag Kenya, 26.0 m, KE-MSA-4410'},
+ {name:'R. Castell',email:'rc@example.com',vessel:'Kilindini Star',flag:'Kenya',loa:28,mmsi:'634009871',imo:'',reg:'KE-MSA-1180',checks:[[1,'MMSI 634009871 is valid for Kenya'],[0,'MMSI already belongs to Kilindini Star (YACHT-000003)'],[1,'Registry document received (#a91c07e2f4)']],ai:'Owner name on the certificate differs from the account name'}];
+let lastRun=null;
+window.renderAuto=function(){if($('#v-auto').hidden)return;
+  const regs=[...SAMPLE_REGS.filter(r=>!r.approved),...ACCOUNTS.filter(a=>a.claim&&a.status==='pending').map(a=>({name:a.name,email:a.email,vessel:a.claim.vessel,flag:(COUNTRIES.find(c=>c[0]===a.claim.flag)||[0,a.claim.flag])[1],loa:a.claim.loa,mmsi:a.claim.mmsi,imo:a.claim.imo,reg:a.claim.reg,checks:a.claim.checks.map(c=>[c.ok?1:0,c.msg]),ai:a.claim.checks.every(c=>c.ok)?'Certificate matches the claim':'',acct:a}))];
+  const ready=regs.filter(r=>r.checks.every(c=>c[0])).length;
+  const open=APLOG.filter(l=>!l.resolved&&l.outcome==='flagged').length;
+  $('#apLast').textContent=lastRun?new Date(lastRun).toLocaleTimeString():'not yet';
+  $('#apApprove').textContent=`Approve recommended (${ready})`;$('#apApprove').disabled=!ready;
+  $('#apKpi').innerHTML=[['Open flags',open,open?'var(--crit)':''],['Owners ready to approve',ready,''],['Need review',regs.length-ready,''],['Tasks done today',APLOG.filter(l=>l.outcome==='done').length,'']].map(([l,v,c])=>`<div class="panel kpi"><div class="l">${l}</div><div class="v" style="${c?'color:'+c:''}">${v}</div></div>`).join('');
+  $('#apRegs').innerHTML=regs.length?regs.map((r,i)=>`<tr><td><b>${esc(r.name)}</b><br><span class="small muted">${esc(r.email)}</span></td><td>${esc(r.vessel)} · ${esc(r.flag)} · ${r.loa} m<br><span class="mono small muted">${r.mmsi?'MMSI '+r.mmsi:''} ${r.imo?'IMO '+r.imo:''} · ${esc(r.reg)}</span></td>
+    <td class="small">${r.checks.map(c=>`<div class="${c[0]?'ok-t':'crit-t'}">${c[0]?'✓':'✗'} ${esc(c[1])}</div>`).join('')}</td><td class="small">${r.ai?`<span class="${r.checks.every(c=>c[0])?'ok-t':'warn-t'}">AI: ${esc(r.ai)}</span>`:'<span class="muted">—</span>'}</td>
+    <td><span class="pill ${r.checks.every(c=>c[0])?'ok':'warn'}">${r.checks.every(c=>c[0])?'recommend approve':'needs review'}</span></td></tr>`).join(''):'<tr><td colspan="5" class="small muted">No owners waiting.</td></tr>';
+  $('#apLog').innerHTML=APLOG.length?APLOG.slice(0,40).map(l=>`<li class="${l.resolved?'res':''} aprow"><span class="pill ${TONE[l.outcome]||''}">${l.outcome.replace('_',' ')}</span><span class="small muted">${JOBS[l.job]||l.job}${l.ai?' · AI':''}</span><span>${esc(l.summary)}</span><span class="small muted">${new Date(l.at).toLocaleTimeString()}</span></li>`).join(''):'<li class="small muted">Nothing yet. Press Run now.</li>'};
+const sleep2=ms=>new Promise(r=>setTimeout(r,ms));
+$('#apRun').addEventListener('click',async()=>{const b=$('#apRun');b.disabled=true;b.textContent='Running…';
+  // 1 holds
+  const exp=ST.holds.filter(h=>!h.mine);if(exp.length){exp[0].exp=Date.now()-1;activeHold(exp[0].k)}else APL('holds','done','No berth holds ran out. Every hold is live and counting down.');await sleep2(500);
+  // 2 berth fit
+  for(const [k,bk] of Object.entries(ST.booked)){const b=BERTHS.find(x=>key(x)===k),y=yb(bk.yid),f=fit(y,b);if(!f.ok&&!APLOG.some(l=>l.job==='berth_fit'&&l.summary.includes(y.name)&&!l.resolved))APL('berth_fit','flagged',`${y.name} does not fit berth ${b.berth} at ${M[b.marina].name.split(',')[0]}: ${f.reasons.join('; ')}. Suggest berth ${(BERTHS.filter(x=>x.marina===b.marina&&fit(y,x).ok&&!ST.booked[key(x)]).sort((a,c)=>a.loa-c.loa)[0]||{berth:'—'}).berth}.`)}
+  await sleep2(500);
+  // 3 arrivals
+  APL('arrivals','done','Arrival of Yas Falcon at berth A040 proven by signed GPS and AIS within 40 m; escrow is ready for release.');await sleep2(500);
+  APL('arrivals','flagged','Satellite radar measured a 47 m hull arriving for berth B132 (max 40 m). Held for a person to check before anyone is charged.');await sleep2(500);
+  // 4 registrations
+  for(const r of SAMPLE_REGS.filter(r=>!r.approved)){const ok=r.checks.every(c=>c[0]);if(!APLOG.some(l=>l.job==='registrations'&&l.summary.startsWith(r.name)))APL('registrations',ok?'recommend_approve':'needs_review',`${r.name} (${r.vessel}): ${ok?'every check passed, recommend approval':'needs review: '+r.checks.filter(c=>!c[0]).map(c=>c[1]).join('; ')}`,true)}
+  await sleep2(600);
+  // 5 brief
+  const br=$('#apBrief');br.hidden=false;br.innerHTML=`<span class="ap-badge">AI brief</span><div><b>One yacht is in a berth it doesn&#39;t fit, and one arrival looks like the wrong hull.</b><ol class="small"><li>Move Northwind Reverie (55 m) from A044 to A050 before 14 Nov.</li><li>Check the satellite image for berth B132 before releasing escrow.</li><li>Approve Neema Otieno: every check passed.</li><li>Ask R. Castell for proof of ownership: the MMSI already belongs to Kilindini Star.</li></ol></div>`;
+  APL('brief','info','One yacht is in a berth it doesn\'t fit, and one arrival looks like the wrong hull.',true);
+  lastRun=Date.now();b.disabled=false;b.textContent='Run now';renderAuto()});
+$('#apApprove').addEventListener('click',()=>{let n=0;SAMPLE_REGS.forEach(r=>{if(!r.approved&&r.checks.every(c=>c[0])){r.approved=true;n++}});ACCOUNTS.forEach(a=>{if(a.claim&&a.status==='pending'&&a.claim.checks.every(c=>c.ok)){a.status='active';n++}});saveAccounts();
+  APL('registrations','done',`Admin approved ${n} owner${n===1?'':'s'} the autopilot recommended`);toast(`Approved ${n} owner${n===1?'':'s'}.`);renderAuto()});
+
+function v7route(n=0){const v=(location.hash||'#home').slice(1);const id={berths:'#v-berths',berthboard:'#v-bboard',autopilot:'#v-auto'}[v];if(!id)return;if($(id).hidden){if(n<20)setTimeout(()=>v7route(n+1),100);return}
+  if(v==='berths'){lastSig='';renderBerths(true)}if(v==='berthboard'){bbSig='';renderBoard()}if(v==='autopilot')renderAuto()}
+addEventListener('hashchange',()=>setTimeout(v7route,0));setTimeout(v7route,0);
 })();
 </script>
 </body></html>
