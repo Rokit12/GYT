@@ -41,6 +41,7 @@ export default async function PassportPage({ params }: { params: { id: string } 
         <div className="row">
           <FollowButton yachtId={y.id} name={y.name} />
           <Link className="btn primary" href={`/track?yacht=${y.id}`}>Track this yacht</Link>
+          <Link className="btn" href={`/map?yacht=${y.id}`}>See on map</Link>
         </div>
       </div>
       <Gallery id={y.id} name={y.name} />

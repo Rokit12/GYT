@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     fusion_window_minutes: int = 45  # observations must be this recent to count
     fusion_max_spread_m: int = 1500  # max distance between sources to agree
 
+    # Software tracking from a signed-in phone or laptop (no hardware GPS needed)
+    device_tracking_enabled: bool = True
+    device_max_accuracy_m: float = 1000  # fixes vaguer than this are refused
+    device_good_accuracy_m: float = 100  # fixes at least this precise count as "good"
+    device_min_interval_s: int = 10  # store at most one fix per session this often
+    device_max_speed_kn: float = 60  # faster jumps between fixes are stored but flagged
+    device_counts_for_arrival: bool = True  # a good device fix may stand in for signed GPS (needs AIS or SAR too)
+
     # Use or Earn
     credit_rate: float = 0.06
     holder_discount: float = 0.85

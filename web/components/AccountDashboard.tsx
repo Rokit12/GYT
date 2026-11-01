@@ -139,6 +139,7 @@ export default function AccountDashboard() {
                       <span className="row" style={{ gap: 6 }}>
                         <Link className="btn sm primary" href={`/track?yacht=${y.id}`}>Track</Link>
                         <Link className="btn sm" href={`/yachts/${y.id}`}>Passport</Link>
+                        {y.owner && <Link className="btn sm" href="/track/device">Track from phone</Link>}
                         {y.owner && <Link className="btn sm" href={`/yachts/${y.id}#photos`}>{y.photo_count ? `Photos (${y.photo_count})` : "＋ Add photos"}</Link>}
                         {y.following && <button className="sm ghost" onClick={() => unfollow(y)}>Unfollow</button>}
                       </span>

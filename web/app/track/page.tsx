@@ -6,8 +6,9 @@ import { Suspense } from "react";
 import { call, type Yacht } from "@/lib/api";
 import HashCheck from "@/components/HashCheck";
 import LiveMap from "@/components/LiveMap";
+import Link from "next/link";
 
-type Pos = { source: "gps" | "ais" | "sar"; observed_at: string; lat: number; lon: number; verified: boolean };
+type Pos = { source: "gps" | "ais" | "sar" | "device"; observed_at: string; lat: number; lon: number; verified: boolean; accuracy_m: number | null };
 type Ev = { id: number; event_type: string; observed_at: string; leaf: string; anchor_id: number | null; root: string | null; chain_tx: string | null };
 type Track = { yacht: { id: string; name: string; mmsi: string; twin_status: string; twin_tx: string | null; twin_token_id: number | null }; positions: Pos[]; events: Ev[] };
 
@@ -54,9 +55,11 @@ function TrackInner() {
     return out;
   }, [data]);
 
+  // The verified track: signed GPS when the yacht has hardware, otherwise the crew's phone fixes.
+  const trackSource = data?.positions.some((p) => p.source === "gps") ? "gps" : "device";
   const trackLine = useMemo(
-    () => (data?.positions ?? []).filter((p) => p.source === "gps").map((p) => [p.lon, p.lat] as [number, number]),
-    [data],
+    () => (data?.positions ?? []).filter((p) => p.source === trackSource && (p.source === "gps" || p.verified)).map((p) => [p.lon, p.lat] as [number, number]),
+    [data, trackSource],
   );
 
   async function copy(e: Ev) {
@@ -87,22 +90,26 @@ function TrackInner() {
 
       <div className="grid g-track">
         <div className="panel">
-          <header><h3>Verified track</h3><span className="legend small"><i style={{ background: "#c9902a", borderRadius: 2, height: 4 }} />Signed GPS track <i style={{ borderColor: "#c9902a" }} className="ring" />AIS <i style={{ borderColor: "#c2453f" }} className="ring" />Satellite SAR</span></header>
+          <header><h3>Verified track</h3><span className="legend small"><i style={{ background: "#c9902a", borderRadius: 2, height: 4 }} />{trackSource === "gps" ? "Signed GPS track" : "Phone track"} <i style={{ borderColor: "#c9902a" }} className="ring" />AIS <i style={{ borderColor: "#c2453f" }} className="ring" />Satellite SAR</span></header>
           <LiveMap height={440} focus={id || null} onSelect={setId}
-            track={trackLine} signals={data?.positions.filter((p) => p.source !== "gps").slice(-12)} />
+            track={trackLine} signals={data?.positions.filter((p): p is Pos & { source: "ais" | "sar" } => p.source === "ais" || p.source === "sar").slice(-12)} />
         </div>
         <div className="panel">
           <header><h3>Latest signals</h3></header>
-          {(["gps", "ais", "sar"] as const).map((s) => {
+          {(["gps", "device", "ais", "sar"] as const).map((s) => {
             const p = latest[s];
             return (
               <div className="kv" key={s}>
-                <span>{s === "gps" ? "Signed GPS" : s === "ais" ? "AIS" : "Satellite SAR"}</span>
-                <span className="mono small">{p ? `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)} · ${new Date(p.observed_at).toLocaleTimeString()}` : "No fix in period"}</span>
+                <span>{s === "gps" ? "Signed GPS" : s === "device" ? "Phone or laptop" : s === "ais" ? "AIS" : "Satellite SAR"}</span>
+                <span className="mono small">{p ? `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}${p.source === "device" && p.accuracy_m ? ` ±${Math.round(p.accuracy_m)} m` : ""} · ${new Date(p.observed_at).toLocaleTimeString()}` : "No fix in period"}</span>
               </div>
             );
           })}
-          <p className="small muted">A position is trusted when signed GPS agrees with AIS or satellite radar.</p>
+          <p className="small muted">A position is trusted when signed GPS, or a crew phone when there is no hardware, agrees with AIS or satellite radar.</p>
+          <div className="row">
+            <Link className="btn sm" href="/track/device">Track from this device</Link>
+            <Link className="btn sm" href={`/map${id ? `?yacht=${encodeURIComponent(id)}` : ""}`}>Open on the map</Link>
+          </div>
         </div>
       </div>
 

@@ -1,4 +1,73 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="" defer></script>
+<style>
+/* ---------------- v6: OpenStreetMap yacht map, device tracking ---------------- */
+.osm-wrap { position: relative; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #aad3df; min-height: 280px; max-width: 100%; isolation: isolate; }
+.osm-canvas { position: absolute; inset: 0; }
+.osm-legend { position: absolute; left: 10px; bottom: 30px; z-index: 500; display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 6px 10px; border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--ink); border: 1px solid var(--line); max-width: calc(100% - 20px); }
+.osm-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.osm-legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.osm-tools { position: absolute; right: 10px; top: 10px; z-index: 500; display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 4px; border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--ink); border: 1px solid var(--line); }
+.osm-err { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 500; margin: 0; padding: 6px 10px; border-radius: 8px; background: var(--crit-bg); color: var(--crit); }
+.osm-wrap .leaflet-container { font: 13px/1.4 var(--body); background: #aad3df; }
+.osm-y { background: none; border: 0; }
+.osm-y-dot { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 3px #fff, 0 2px 8px rgba(0,0,0,.35); }
+.osm-y-dot svg { width: 17px; height: 17px; fill: #fff; transition: transform .4s; }
+.osm-y-dot.sel { box-shadow: 0 0 0 3px #fff, 0 0 0 7px color-mix(in srgb, var(--c) 45%, transparent), 0 2px 8px rgba(0,0,0,.35); }
+.osm-y-dot.stale { filter: grayscale(.7); opacity: .7; }
+.osm-y-name { position: absolute; left: 34px; top: 6px; white-space: nowrap; font: 600 12px/1 var(--body); color: #0d1f2d; padding: 3px 6px; border-radius: 5px; background: rgba(255,255,255,.88); pointer-events: none; }
+.osm-me-dot { display: block; width: 18px; height: 18px; border-radius: 50%; background: #2b6cb0; box-shadow: 0 0 0 3px #fff, 0 0 0 0 rgba(43,108,176,.5); animation: osm-me 2s infinite; }
+@keyframes osm-me { 70% { box-shadow: 0 0 0 3px #fff, 0 0 0 16px rgba(43,108,176,0); } 100% { box-shadow: 0 0 0 3px #fff, 0 0 0 0 rgba(43,108,176,0); } }
+@media (prefers-reduced-motion: reduce) { .osm-me-dot { animation: none; } }
+.osm-pop { display: grid; gap: 3px; min-width: 200px; color: #0d1f2d; }
+.osm-pop b { font: 800 18px/1.1 var(--display); }
+.osm-pop-src { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #566874; margin-bottom: 4px; }
+.osm-pop-src i { width: 9px; height: 9px; border-radius: 50%; }
+.osm-pop-kv { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+.osm-pop-kv span:first-child { color: #566874; }
+.osm-pop-links { display: flex; gap: 12px; margin-top: 6px; font-weight: 600; }
+
+.mapx { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+.mapx-list { display: grid; gap: 10px; max-height: min(72vh, 680px); overflow: auto; }
+.mapx-list ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.mapx-row { width: 100%; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 10px; align-items: center; text-align: left; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); cursor: pointer; }
+.mapx-row:hover { background: var(--surface2); }
+.mapx-row.on { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.mapx-row i { width: 10px; height: 10px; border-radius: 50%; }
+.mapx-name { display: grid; min-width: 0; }
+.mapx-name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 860px) { .mapx { grid-template-columns: 1fr; } .mapx-list { max-height: 260px; order: 2; } }
+
+.devt { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.devt-ctrl { display: grid; gap: 14px; }
+.devt-ctrl .f { display: grid; gap: 6px; font-weight: 600; }
+.devt-map { display: grid; gap: 12px; min-width: 0; }
+.devt-status { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 10px; background: var(--surface2); border: 1px solid var(--line); }
+.devt-status.ok { background: var(--ok-bg); border-color: transparent; color: var(--ok); }
+.devt-status.warn { background: var(--warn-bg); border-color: transparent; color: var(--warn); }
+.devt-status.crit { background: var(--crit-bg); border-color: transparent; color: var(--crit); }
+.devt-status b { color: inherit; }
+.devt-dot { width: 12px; height: 12px; border-radius: 50%; background: currentColor; opacity: .55; flex: none; }
+.devt-dot.live { opacity: 1; animation: devt-pulse 1.6s infinite; }
+@keyframes devt-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 50%, transparent); } 100% { box-shadow: 0 0 0 12px transparent; } }
+@media (prefers-reduced-motion: reduce) { .devt-dot.live { animation: none; } }
+.devt-kv { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin: 0; }
+.devt-kv div { display: grid; gap: 2px; }
+.devt-kv dt { font: 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.devt-kv dd { margin: 0; font-weight: 600; }
+.devt-help ul { padding-left: 18px; margin: 8px 0 0; display: grid; gap: 6px; }
+.devt-help summary { cursor: pointer; font-weight: 600; }
+.btn.danger { background: var(--crit); color: #fff; border-color: var(--crit); }
+.crew-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.crew-list li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.empty-state { display: grid; gap: 10px; justify-items: start; }
+@media (max-width: 860px) { .devt { grid-template-columns: 1fr; } }
+.crew-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; }
+@media (max-width: 520px) { .crew-form { grid-template-columns: 1fr; } }
+</style>
 <title>Global Yacht Tokenization</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1011,6 +1080,58 @@ tr.avail-row td { color: var(--muted); font-style: italic; }
 </section>
 
 <!-- ============ ABOUT ============ -->
+<!-- ============ YACHT MAP (OpenStreetMap) ============ -->
+<section class="view" id="v-osm" data-view="map" hidden>
+  <div><div class="eyebrow">Yacht map</div><h1>Where every yacht is</h1>
+    <p class="lede">The latest position of every verified yacht on OpenStreetMap, from hardware GPS, an owner&#39;s or captain&#39;s phone, or public AIS.</p></div>
+  <div class="mapx">
+    <aside class="panel mapx-list" aria-label="Yachts on the map">
+      <input type="search" id="osmQ" placeholder="Search yachts or marinas" aria-label="Search yachts">
+      <div class="seg" role="group" aria-label="Filter by tracking source" id="osmSrc"><button type="button" data-s="all" aria-pressed="true">All</button><button type="button" data-s="gps">GPS</button><button type="button" data-s="device">Phone</button><button type="button" data-s="ais">AIS</button></div>
+      <ul id="osmList"></ul>
+      <p class="small muted">No tracker on board? Owners and crew can <a href="#device">track from their phone</a>.</p>
+    </aside>
+    <div class="osm-wrap" style="height:min(72vh,680px)"><div class="osm-canvas" id="osmMap" role="region" aria-label="OpenStreetMap of yacht locations"></div>
+      <div class="osm-legend small"><span><i style="background:#c9902a"></i>Hardware GPS</span><span><i style="background:#1f8a8a"></i>Phone or laptop</span><span><i style="background:#5b6b82"></i>Public AIS</span><span id="osmMeKey" hidden><i style="background:#2b6cb0"></i>This device</span></div>
+      <div class="osm-tools"><button type="button" class="sm" id="osmFit">Show all</button><span class="small" id="osmCount"></span></div>
+      <p class="osm-err small" id="osmErr" hidden>The map library could not load. Check your connection and reload.</p></div>
+  </div>
+  <p class="small muted">This preview simulates the yachts&#39; voyages. On the live platform, positions come from the GYT API.</p>
+</section>
+
+<!-- ============ TRACK FROM THIS DEVICE ============ -->
+<section class="view" id="v-dev" data-view="device" hidden>
+  <div><div class="eyebrow">Track &amp; verify</div><h1>Track from this device</h1>
+    <p class="lede">No tracker on board? Open this page on your phone or laptop while you&#39;re aboard and press Start. Your device&#39;s location becomes the yacht&#39;s position on the GYT map for as long as you share.</p></div>
+  <div class="devt">
+    <div class="panel devt-ctrl">
+      <label class="f" for="devYacht">Yacht<select id="devYacht"></select></label>
+      <label class="f" for="devLabel">This device<input id="devLabel" maxlength="60" placeholder="Captain&#39;s phone"></label>
+      <div class="devt-status" id="devStatus" role="status" aria-live="polite"><span class="devt-dot" aria-hidden="true"></span><div><b id="devStateT">Not sharing</b><div class="small" id="devNote"></div></div></div>
+      <button class="btn primary lg" id="devStart" type="button">Start sharing location</button>
+      <button class="btn lg danger" id="devStop" type="button" hidden>Stop sharing</button>
+      <dl class="devt-kv">
+        <div><dt>Accuracy</dt><dd id="devAcc">—</dd></div><div><dt>Sent</dt><dd id="devSent">0 fixes</dd></div>
+        <div><dt>Last sent</dt><dd id="devLast">—</dd></div><div><dt>Waiting to send</dt><dd id="devQ">0</dd></div>
+        <div><dt>Screen kept awake</dt><dd id="devAwake">—</dd></div><div><dt>Interval</dt><dd>every 10 s</dd></div>
+      </dl>
+      <details class="small devt-help"><summary>How this works and what to expect</summary><ul>
+        <li>Your device&#39;s location becomes the chosen yacht&#39;s position on the map while this page is open and sharing.</li>
+        <li>Keep this page open, the screen on and the phone charging. Phones pause location for web pages when the screen locks or you switch apps.</li>
+        <li>No signal at sea? Fixes are saved on this device and sent when the connection returns.</li>
+        <li>Phone positions are tied to your account, not to sealed hardware, so they are labelled <i>Phone or laptop</i>. For an arrival proof, AIS or satellite radar must still agree with them.</li>
+        <li>Starting and stopping are recorded as hashed events on the yacht&#39;s timeline.</li>
+        <li>In this preview you can pick any demo yacht and everything stays in your browser. On the live platform only the yacht&#39;s owner, crew the owner adds, and admins can share.</li>
+      </ul></details>
+    </div>
+    <div class="devt-map">
+      <div class="osm-wrap" style="height:min(62vh,560px)"><div class="osm-canvas" id="devMap" role="region" aria-label="Map of this device and the yacht"></div>
+        <div class="osm-legend small"><span><i style="background:#1f8a8a"></i>Yacht (phone fix)</span><span><i style="background:#2b6cb0"></i>This device</span></div></div>
+      <p class="small muted" id="devLastPos"></p>
+    </div>
+  </div>
+</section>
+
 <section class="view" id="v-about" data-view="about" hidden>
   <div class="abouthero">
     <img src="site/media/yachts/YACHT-000004-a.jpg" alt="" aria-hidden="true" class="ah-img" id="ahImg">
@@ -1076,7 +1197,7 @@ tr.avail-row td { color: var(--muted); font-style: italic; }
   </div>
   <div class="grid g-track">
     <div class="panel"><header><h3>Verified track</h3><span class="legend small"><span><i style="background:var(--accent)"></i>Signed GPS</span><span><i class="ring" style="border-color:var(--brass)"></i>AIS</span><span><i class="ring" style="border-color:var(--crit)"></i>Satellite SAR</span></span></header><div id="tkPlot"></div><div class="lmap sm" data-map="track" hidden><div class="cv"></div><div class="lchip"><span class="livedot" aria-hidden="true"></span><span data-chip="track">Loading…</span><span class="small muted">Following live · simulated in this preview</span></div></div></div>
-    <div class="panel"><header><h3>Latest signals</h3><span class="pill" id="tkState"></span></header><div id="tkSignals"></div><p class="small muted">A position is trusted when signed GPS agrees with AIS or satellite radar.</p></div>
+    <div class="panel"><header><h3>Latest signals</h3><span class="pill" id="tkState"></span></header><div id="tkSignals"></div><p class="small muted">A position is trusted when signed GPS, or a crew phone when there is no hardware, agrees with AIS or satellite radar.</p><div class="row"><a class="btn sm" href="#device">Track from this device</a><a class="btn sm" href="#map">Open the yacht map</a></div></div>
   </div>
   <div class="panel"><header><h3>Record timeline</h3><span class="small muted">Every event is a hash. Anchored hashes are on-chain.</span></header><ol class="timeline" id="tkTimeline"></ol></div>
   <div class="panel" id="tkVerifyPanel"><header><h3>Verify a hash</h3><span class="small muted">Recomputed in your browser</span></header>
@@ -1570,9 +1691,9 @@ tr.avail-row td { color: var(--muted); font-style: italic; }
   <div class="foot2-grid">
     <div class="foot2-brand"><a class="brand2" href="#home" aria-label="GYT home"><span class="mark" data-logo></span><span class="wm"><b>GYT</b><small>Global Yacht<br>Tokenization</small></span></a>
       <p class="small muted">Verified passports, live tracking and records anyone can check, for every yacht on the platform.</p></div>
-    <nav aria-label="Platform"><b>Platform</b><a href="#explore">Explore yachts</a><a href="#how">How it works</a><a href="#track">Track &amp; verify</a><a href="#earn">Use or Earn</a></nav>
+    <nav aria-label="Platform"><b>Platform</b><a href="#explore">Explore yachts</a><a href="#map">Yacht map</a><a href="#how">How it works</a><a href="#track">Track &amp; verify</a><a href="#device">Track from your phone</a><a href="#earn">Use or Earn</a></nav>
     <nav aria-label="Company"><b>Company</b><a href="#about">About GYT</a><a href="#onboard">List your yacht</a><a href="#how-faq" data-faq>Questions</a><a href="#signup">Create an account</a></nav>
-    <nav aria-label="Data"><b>Open data we use</b><span class="small muted">AIS: Digitraffic, aisstream.io</span><span class="small muted">Coastline: Natural Earth</span><span class="small muted">Radar: Copernicus Sentinel-1</span></nav>
+    <nav aria-label="Data"><b>Open data we use</b><span class="small muted">AIS: Digitraffic, aisstream.io</span><span class="small muted">Maps: OpenStreetMap, Natural Earth</span><span class="small muted">Radar: Copernicus Sentinel-1</span></nav>
   </div>
   <p class="small muted foot2-legal">Prototype. Fleet, applicants, berths and chain are sample data; hashes are computed live with SHA-256 in your browser. GYT links to official flag registration; it does not replace it. Economic units are offered only through licensed partners to eligible investors. Not legal, investment or maritime-registration advice.</p>
 </footer>
@@ -1860,7 +1981,7 @@ let tick=0;
 async function step(){
   tick++;
   for(const y of YACHTS){
-    if(y.status!=='underway')continue;
+    if(y.status!=='underway'||y.dev)continue;
     y.t+=y.speed*y.dir; if(y.t>=1||y.t<=0){y.dir*=-1;y.t=Math.max(0,Math.min(1,y.t))}
     const a=M[y.home],b=M[y.to]; const bend=Math.sin(y.t*Math.PI)*0.6;
     y.lat=a.lat+(b.lat-a.lat)*y.t+bend*0.3; y.lon=a.lon+(b.lon-a.lon)*y.t+bend*0.5*(a.lon<b.lon?-1:1);
@@ -2241,8 +2362,8 @@ document.addEventListener('click',e=>{const b=e.target.closest('button[data-conf
   if(b.dataset.armed!=='1'){e.stopImmediatePropagation();e.preventDefault();b.dataset.armed='1';b.dataset.label=b.textContent;b.textContent=b.dataset.confirm;b.classList.add('danger');setTimeout(()=>{if(b.isConnected&&b.dataset.armed==='1'){b.dataset.armed='';b.textContent=b.dataset.label;b.classList.remove('danger')}},3500)}},true);
 
 /* ---------- navigation ---------- */
-const PUBLIC_V=['home','explore','how','about','signin','signup'];
-const SIGNED_V=['track','earn','onboard','account','settings'];
+const PUBLIC_V=['home','explore','map','how','about','signin','signup'];
+const SIGNED_V=['track','device','earn','onboard','account','settings'];
 const ADMIN_V=['admin','monitoring','yachts','hashes','users','investors','banking','operations','marinas','audit','docs-revenue','docs-tracking','docs-research','docs-pitch'];
 const ALL_V=[...PUBLIC_V,...SIGNED_V,...ADMIN_V];
 let afterSignIn=null;
@@ -2255,19 +2376,21 @@ const NAVICON={
  track:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>',
  verify:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.6-3 8.2-7 10-4-1.8-7-5.4-7-10V6z"/><path d="M8.6 12.2l2.4 2.4 4.6-4.8"/></svg>',
  earn:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>',
+ phone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18.5h2"/><path d="M12 7.2a2.4 2.4 0 0 1 2.4 2.4c0 1.8-2.4 4-2.4 4s-2.4-2.2-2.4-4A2.4 2.4 0 0 1 12 7.2z"/></svg>',
  list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><path d="M12 7v13M5 13a7 7 0 0 0 14 0M8 11h8"/></svg>'};
 function buildNav(cur,curAdmin){
   const a=(h,l,on)=>`<li><a class="nl" href="#${h}"${(on??h===cur)?' aria-current="page"':''}>${l}</a></li>`;
   const mi=(h,ic,t,d,extra='')=>`<a class="mi" href="#${h}"${extra}><span class="ic">${NAVICON[ic]}</span><span><b>${t}</b><span>${d}</span></span></a>`;
-  const plat=['track','earn','onboard'].includes(cur);
-  return `<ul class="nav-list">${a('explore','Explore yachts')}${a('how','How it works')}
+  const plat=['track','device','earn','onboard'].includes(cur);
+  return `<ul class="nav-list">${a('explore','Explore yachts')}${a('map','Map')}${a('how','How it works')}
   <li class="has-mega"><button class="nl" type="button" aria-expanded="false" aria-controls="megaPlat"${plat?' aria-current="page"':''}>Platform <svg class="chev" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 3.5 5 7l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
    <div class="mega" id="megaPlat"><div class="mega-links">
     ${mi('track','track','Track &amp; verify','Follow a yacht live and check every record it leaves.')}
+    ${mi('device','phone','Track from your phone','No tracker on board? Share your phone\'s location as the yacht\'s.')}
     ${mi('home','verify','Verify a record','Paste any hash. Your browser checks it against the chain.',' data-verify')}
     ${mi('earn','earn','Use or Earn','Turn ownership units into nights aboard, or into income.')}
     ${mi('onboard','list','List your yacht','Get a verified passport and three-signal tracking.')}
-   </div><a class="mega-feature" href="#explore"><img src="site/media/yachts/YACHT-000002-a.jpg" alt="" loading="lazy"><span class="eyebrow">Live now</span><b>See every yacht on the map</b><span class="small">Gliding markers, trails and partner marinas</span></a></div></li>
+   </div><a class="mega-feature" href="#map"><img src="site/media/yachts/YACHT-000002-a.jpg" alt="" loading="lazy"><span class="eyebrow">Live now</span><b>See every yacht on the map</b><span class="small">OpenStreetMap, live positions and trails</span></a></div></li>
   ${a('about','About')}${me()?a('account','My GYT',['account','settings'].includes(cur)):''}${isAdmin()?a('admin','Admin console',curAdmin):''}</ul><span class="nav-pill" aria-hidden="true"></span><span class="nav-ink" aria-hidden="true"></span>`;
 }
 function renderNav(){
@@ -3029,6 +3152,9 @@ const FEAT={
  account:{eyebrow:'My GYT',title:'Your yachts, their activity and your units, in one place.',img:'YACHT-000001-a',lede:'Follow yachts, see what happens to them as it happens, keep an eye on what your units are worth, and set how you want to be told.',time:'Free account',
   perks:[['★','Followed yachts','Live status, last fix and inspection flags at a glance.'],['≡','Activity feed','Movements, arrivals, maintenance, bookings and ownership, filterable.'],['◈','Holdings','Units, share of each yacht and indicative value.'],['⚙','Your settings','Profile, alerts, password and wallet in one place.']],
   steps:[['Create an account','Three short steps.'],['Follow a few yachts','Pick them during sign-up or later.'],['Open My GYT','Everything updates every few seconds.']],demo:'account'}};
+FEAT.device={eyebrow:'Track from your phone',title:'No tracker on board? Your phone is enough.',img:'YACHT-000005-a',lede:'Owners and their captains can share a phone\'s or laptop\'s location as the yacht\'s position, straight from the browser. Nothing to install or fit.',time:'Free · works in any modern browser',
+  perks:[['⌖','Phone becomes the tracker','Press Start aboard; the yacht moves on the GYT map as you do.'],['⇅','Works with patchy signal','Fixes are saved on the device at sea and sent when you\'re back in range.'],['👥','Share with your captain','Owners add crew by email so they can track from their own phone.'],['#','Recorded and labelled','Every session is a hashed event; positions are marked as phone fixes.']],
+  steps:[['Create a free account','Name, email and a password.'],['List your yacht, or be added as crew','Owners list the yacht; captains are added by the owner.'],['Open Track from this device','Press Start and keep the page open.']],demo:'live'};
 FEAT.settings=FEAT.account;
 let introKey=null;
 function liveRows(){return minted().slice(0,6).map(y=>`<div class="row"><span><span class="dot on" aria-hidden="true"></span> <b>${esc(y.name)}</b> <span class="muted small">· ${y.status==='underway'?'underway to '+esc(M[y.to].name.split(',')[0]):'at '+esc(M[y.home].name.split(',')[0])}</span></span><span class="mono small muted">${y.lat.toFixed(3)}°, ${y.lon.toFixed(3)}°${y.lastHash?' · #'+y.lastHash.slice(0,8):''}</span></div>`).join('')}
@@ -3127,6 +3253,116 @@ addEventListener('hashchange',afterRoute);
 if(!$('#v-intro').hidden&&introKey==null){const v=(location.hash||'').slice(1);if(FEAT[v])renderIntro(v)}
 afterRoute();
 renderFleet();renderPassport();
+})();
+</script>
+<script>
+/* ---------- v6: OpenStreetMap yacht map + track from this device ---------- */
+(function(){
+const OSM_TILES='https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const OSM_ATTR='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+const SRC={gps:{l:'Hardware GPS',c:'#c9902a'},device:{l:'Phone or laptop',c:'#1f8a8a'},ais:{l:'Public AIS',c:'#5b6b82'}};
+const srcOf=y=>y.dev?'device':'gps';
+const ago=s=>s<90?Math.max(0,Math.round(s))+' s ago':s<5400?Math.round(s/60)+' min ago':Math.round(s/3600)+' h ago';
+const yachtsOnMap=()=>YACHTS.filter(y=>!y.retired);
+let Lm=null,osm=null,osmMk=new Map(),osmTrails=null,osmFitted=false,osmFocus=null,osmFilter='all';
+
+function needL(cb){if(window.L)return cb();let n=0;const t=setInterval(()=>{if(window.L){clearInterval(t);cb()}else if(++n>40){clearInterval(t);const e=$('#osmErr');if(e)e.hidden=false}},250)}
+function divIcon(y,sel){const c=SRC[srcOf(y)].c;return L.divIcon({className:'osm-y',iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-14],
+  html:`<span class="osm-y-dot${sel?' sel':''}" style="--c:${c}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 L17 15 Q12 22 7 15 Z"/></svg></span><span class="osm-y-name">${esc(y.name)}</span>`})}
+function popup(y){const s=SRC[srcOf(y)];const acc=y.dev&&y.devAcc?` · ±${Math.round(y.devAcc)} m`:'';const seen=y.dev&&y.devAt?ago((Date.now()-y.devAt)/1000):'just now';
+  return `<div class="osm-pop"><b>${esc(y.name)}</b><div class="osm-pop-src"><i style="background:${s.c}"></i>${s.l}${acc}</div>
+  <div class="osm-pop-kv"><span>Seen</span><span>${seen}</span></div><div class="osm-pop-kv"><span>Status</span><span>${y.dev?'shared from a phone':y.status==='underway'?'underway':'berthed'}</span></div>
+  <div class="osm-pop-kv"><span>Position</span><span class="mono">${y.lat.toFixed(4)}, ${y.lon.toFixed(4)}</span></div><div class="osm-pop-kv"><span>Home</span><span>${esc((M[y.home]||{}).name||'')}</span></div>
+  <div class="osm-pop-links"><a href="#track" data-track="${y.id}">Track &amp; verify</a></div></div>`}
+function shownYachts(){const q=($('#osmQ').value||'').toLowerCase();return yachtsOnMap().filter(y=>(osmFilter==='all'||srcOf(y)===osmFilter)&&(!q||`${y.name} ${y.id} ${(M[y.home]||{}).name}`.toLowerCase().includes(q)))}
+function initOsm(){if(osm)return;osm=L.map('osmMap',{worldCopyJump:true,scrollWheelZoom:false}).setView([30,20],3);
+  L.tileLayer(OSM_TILES,{maxZoom:19,attribution:OSM_ATTR}).addTo(osm);L.control.scale({imperial:false}).addTo(osm);
+  osm.on('click',()=>osm.scrollWheelZoom.enable());osm.on('mouseout',()=>osm.scrollWheelZoom.disable());osmTrails=L.layerGroup().addTo(osm)}
+window.updateOsm=function(){if(!osm)return;const ys=shownYachts();const seen=new Set();osmTrails.clearLayers();
+  for(const y of ys){seen.add(y.id);let mk=osmMk.get(y.id);const sel=osmFocus===y.id;
+    if(!mk){mk=L.marker([y.lat,y.lon],{icon:divIcon(y,sel),title:y.name,riseOnHover:true}).addTo(osm);mk.on('click',()=>{osmFocus=y.id;renderOsmList()});osmMk.set(y.id,mk)}
+    else{mk.setLatLng([y.lat,y.lon]);mk.setIcon(divIcon(y,sel))}
+    if(!mk.isPopupOpen())mk.bindPopup(popup(y),{maxWidth:260});
+    const tr=y.dev?(y.devTrail||[]):y.trail;if(tr&&tr.length>1)L.polyline(tr,{color:SRC[srcOf(y)].c,weight:3,opacity:.7}).addTo(osmTrails)}
+  for(const [id,mk] of osmMk)if(!seen.has(id)){mk.remove();osmMk.delete(id)}
+  $('#osmCount').textContent=ys.length+(ys.length===1?' yacht':' yachts');
+  if(!osmFitted&&ys.length){const f=osmFocus&&osmMk.get(osmFocus);if(f){osm.setView(f.getLatLng(),10);f.openPopup()}else osm.fitBounds(L.latLngBounds(ys.map(y=>[y.lat,y.lon])).pad(.2),{maxZoom:10});osmFitted=true}
+  if(document.activeElement!==$('#osmQ'))renderOsmList()};
+function renderOsmList(){const ys=shownYachts();$('#osmList').innerHTML=ys.map(y=>{const s=srcOf(y);return `<li><button type="button" class="mapx-row${osmFocus===y.id?' on':''}" data-osm="${y.id}"><i style="background:${SRC[s].c}" aria-hidden="true"></i><span class="mapx-name"><b>${esc(y.name)}</b><span class="small muted">${SRC[s].l} · ${y.dev&&y.devAt?ago((Date.now()-y.devAt)/1000):y.status==='underway'?'underway':'berthed'}</span></span></button></li>`}).join('')||'<li class="small muted" style="padding:12px">No yachts match.</li>'}
+$('#osmList').addEventListener('click',e=>{const b=e.target.closest('[data-osm]');if(!b)return;osmFocus=b.dataset.osm;const mk=osmMk.get(osmFocus);if(mk){osm.setView(mk.getLatLng(),11);mk.openPopup()}renderOsmList();updateOsm()});
+$('#osmSrc').addEventListener('click',e=>{const b=e.target.closest('[data-s]');if(!b)return;osmFilter=b.dataset.s;$('#osmSrc').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));osmFitted=false;updateOsm()});
+$('#osmQ').addEventListener('input',()=>{osmFitted=false;updateOsm();renderOsmList()});
+$('#osmFit').addEventListener('click',()=>{const ys=shownYachts();if(ys.length)osm.fitBounds(L.latLngBounds(ys.map(y=>[y.lat,y.lon])).pad(.2),{maxZoom:11})});
+document.addEventListener('click',e=>{const a=e.target.closest('.osm-pop a[data-track]');if(a&&$('#tkYacht')){setTimeout(()=>{const s=$('#tkYacht');s.value=a.dataset.track;s.dispatchEvent(new Event('change'))},50)}});
+
+/* ---- track from this device ---- */
+const DEVK='gyt-device';let D=store.get(DEVK,{});// {yid:{trail:[[lat,lon]],at,acc,lat,lon,label,queue:[]}}
+const saveD=()=>store.set(DEVK,D);
+YACHTS.forEach(y=>{const d=D[y.id];if(d&&d.lat!=null){y.dev=true;y.lat=d.lat;y.lon=d.lon;y.devAt=d.at;y.devAcc=d.acc;y.devTrail=d.trail||[]}});
+let dev={yid:null,watch:null,timer:null,latest:null,lastFix:null,lastReading:0,sent:0,lastSent:null,lock:null,first:true};
+let dmap=null,dYm=null,dMe=null,dMeC=null,dTrail=null;
+function devOptions(){const u=me();const OWN=store.get('gyt-owned',{});const own=yachtsOnMap().filter(y=>OWN[y.id]===(u&&u.email));const rest=yachtsOnMap().filter(y=>!own.includes(y));
+  return (own.length?`<optgroup label="Your yachts">${own.map(y=>`<option value="${y.id}">${esc(y.name)}</option>`).join('')}</optgroup>`:'')+`<optgroup label="Demo yachts">${rest.map(y=>`<option value="${y.id}">${esc(y.name)}</option>`).join('')}</optgroup>`}
+function guess(){const ua=navigator.userAgent;return /iPhone/.test(ua)?'iPhone':/iPad/.test(ua)?'iPad':/Android/.test(ua)?(/Mobile/.test(ua)?'Android phone':'Android tablet'):'Laptop'}
+function setState(t,tone,note){$('#devStateT').textContent=t;$('#devStatus').className='devt-status '+(tone||'');$('#devStatus .devt-dot').classList.toggle('live',tone==='ok');if(note!==undefined)$('#devNote').textContent=note}
+function kv(){$('#devSent').textContent=dev.sent+(dev.sent===1?' fix':' fixes');$('#devLast').textContent=dev.lastSent?ago((Date.now()-dev.lastSent)/1000):'—';const d=D[dev.yid||$('#devYacht').value];$('#devQ').textContent=d&&d.queue?d.queue.length:0}
+function initDevMap(){if(dmap)return;dmap=L.map('devMap',{scrollWheelZoom:false}).setView([25.08,55.14],12);L.tileLayer(OSM_TILES,{maxZoom:19,attribution:OSM_ATTR}).addTo(dmap);L.control.scale({imperial:false}).addTo(dmap);dTrail=L.polyline([],{color:'#1f8a8a',weight:3}).addTo(dmap)}
+function drawDev(){if(!dmap)return;const y=YACHTS.find(x=>x.id===$('#devYacht').value);if(!y)return;
+  if(!dYm)dYm=L.marker([y.lat,y.lon],{icon:divIcon(y,false)}).addTo(dmap);else{dYm.setLatLng([y.lat,y.lon]);dYm.setIcon(divIcon(y,false))}
+  dTrail.setLatLngs(y.dev?(y.devTrail||[]):[]);
+  if(dev.latest||dev.lastFix){const f=dev.lastFix;if(f){if(!dMe){dMeC=L.circle([f.lat,f.lon],{radius:f.acc,color:'#2b6cb0',weight:1,fillOpacity:.12}).addTo(dmap);dMe=L.marker([f.lat,f.lon],{icon:L.divIcon({className:'osm-me',iconSize:[18,18],iconAnchor:[9,9],html:'<span class="osm-me-dot"></span>'}),zIndexOffset:1000}).addTo(dmap).bindTooltip('This device');dmap.setView([f.lat,f.lon],15)}else{dMe.setLatLng([f.lat,f.lon]);dMeC.setLatLng([f.lat,f.lon]).setRadius(f.acc)}}}
+  else if(!dev.watch)dmap.setView([y.lat,y.lon],y.dev?14:9);
+  const d=D[y.id];$('#devLastPos').textContent=d&&d.at?`Last phone fix for ${y.name}: ${d.lat.toFixed(4)}, ${d.lon.toFixed(4)} (±${Math.round(d.acc)} m), ${ago((Date.now()-d.at)/1000)}.`:`${y.name} has no phone fixes yet.`}
+window.renderDev=function(){const sel=$('#devYacht');const cur=sel.value;sel.innerHTML=devOptions();if(cur)sel.value=cur;if(!sel.value&&sel.options.length)sel.selectedIndex=0;
+  if(!$('#devLabel').value)$('#devLabel').value=store.get('gyt-devlabel','')||guess();kv();needL(()=>{initDevMap();setTimeout(()=>dmap.invalidateSize(),0);drawDev()})};
+$('#devYacht').addEventListener('change',()=>{if(dYm){dYm.remove();dYm=null}drawDev();kv()});
+function accept(y,f){// mirror of the API's checks: accuracy, throttle, impossible jumps
+  const d=D[y.id]||(D[y.id]={trail:[],queue:[]});
+  if(f.acc>1000)return{ok:false,why:`Location is too vague (${Math.round(f.acc)} m). Turn on precise location or move into the open.`};
+  if(d.at&&f.t-d.at<10e3)return{ok:false,throttled:true};
+  let flag='';if(d.at){const dist=hav(d.lat,d.lon,f.lat,f.lon),dt=(f.t-d.at)/1000;if(dist>2*f.acc&&dist/dt*1.943844>60)flag='jump'}
+  Object.assign(d,{lat:f.lat,lon:f.lon,at:f.t,acc:f.acc,label:$('#devLabel').value});d.trail.push([f.lat,f.lon]);if(d.trail.length>300)d.trail.shift();
+  Object.assign(y,{dev:true,lat:f.lat,lon:f.lon,devAt:f.t,devAcc:f.acc,devTrail:d.trail});saveD();return{ok:true,good:f.acc<=100&&!flag,flag}}
+function hav(a,b,c,d){const R=6371008.8,p1=a*Math.PI/180,p2=c*Math.PI/180,dp=p2-p1,dl=(d-b)*Math.PI/180;const x=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
+async function sendLatest(){const y=YACHTS.find(x=>x.id===dev.yid);if(!y)return;let f=dev.latest;
+  if(!f){if(dev.lastFix&&Date.now()-dev.lastReading>60e3){dev.lastReading=Date.now();f={...dev.lastFix,t:Date.now()}}else return}
+  dev.latest=null;const d=D[y.id]||(D[y.id]={trail:[],queue:[]});
+  if(!navigator.onLine){d.queue=(d.queue||[]).concat([f]).slice(-5000);saveD();setState('No connection: saving fixes on this device','warn');kv();return}
+  if(d.queue&&d.queue.length){for(const q of d.queue.sort((a,b)=>a.t-b.t)){const r=accept(y,q);if(r.ok)dev.sent++}d.queue=[];saveD()}
+  const r=accept(y,f);
+  if(r.ok){dev.sent++;dev.lastSent=Date.now();setState('Sharing location','ok',r.good?'':r.flag?'Stored, but flagged as an unusual jump.':'Stored as approximate (accuracy is low).');
+    if(dev.sent%3===1)await emit(y,'POSITION',{doc:'device:'+f.t})}
+  else if(!r.throttled)setState('Sharing location','warn',r.why);
+  kv();drawDev();if(window.updateOsm)updateOsm()}
+async function keepAwake(){try{if('wakeLock' in navigator){dev.lock=await navigator.wakeLock.request('screen');$('#devAwake').textContent='Yes';dev.lock.addEventListener('release',()=>{$('#devAwake').textContent='Released'})}else $('#devAwake').textContent='Not supported: keep the screen on'}catch(_){$('#devAwake').textContent='Not supported: keep the screen on'}}
+$('#devStart').addEventListener('click',async()=>{const y=YACHTS.find(x=>x.id===$('#devYacht').value);if(!y)return;
+  if(!('geolocation' in navigator)){setState('This browser cannot share location.','crit','');return}
+  if(!window.isSecureContext){setState('Location needs a secure (https://) connection.','crit','');return}
+  store.set('gyt-devlabel',$('#devLabel').value);dev.yid=y.id;dev.sent=0;dev.lastSent=null;setState('Waiting for a location fix…','warn','');
+  $('#devStart').hidden=true;$('#devStop').hidden=false;$('#devYacht').disabled=$('#devLabel').disabled=true;
+  await emit(y,'DEVICE_TRACKING_STARTED',{doc:'session:'+Date.now()});toast(`Sharing this device's location as ${y.name}.`);keepAwake();
+  dev.watch=navigator.geolocation.watchPosition(p=>{const f={lat:p.coords.latitude,lon:p.coords.longitude,acc:Math.max(1,p.coords.accuracy),t:p.timestamp};
+      dev.latest=f;dev.lastFix=f;dev.lastReading=Date.now();$('#devAcc').textContent='±'+Math.round(f.acc)+' m'+(f.acc>100?' (approximate)':'');if(dev.first){dev.first=false;sendLatest()}else drawDev()},
+    e=>{if(e.code===e.PERMISSION_DENIED){stopDev(false);setState('Location permission is off','crit','Allow location for this site in your browser or phone settings, then press Start again.')}
+      else{dev.lastFix=null;$('#devNote').textContent=e.code===e.TIMEOUT?'Still looking for a location fix. Move into the open if you can.':'Location is unavailable right now.'}},
+    {enableHighAccuracy:true,maximumAge:5000,timeout:30000});
+  dev.timer=setInterval(sendLatest,10e3)});
+async function stopDev(record=true){const y=YACHTS.find(x=>x.id===dev.yid);if(dev.watch!==null&&dev.watch!=null)navigator.geolocation.clearWatch(dev.watch);clearInterval(dev.timer);
+  try{dev.lock&&dev.lock.release()}catch(_){}Object.assign(dev,{watch:null,timer:null,latest:null,lastFix:null,lock:null,first:true});
+  if(dMe){dMe.remove();dMeC.remove();dMe=dMeC=null}
+  $('#devStart').hidden=false;$('#devStop').hidden=true;$('#devYacht').disabled=$('#devLabel').disabled=false;setState('Not sharing','','');
+  if(record&&y){await emit(y,'DEVICE_TRACKING_STOPPED',{doc:'stop:'+Date.now()});toast('Stopped sharing location.')}dev.yid=null;kv()}
+$('#devStop').addEventListener('click',()=>stopDev(true));
+addEventListener('online',()=>{if(dev.yid)sendLatest()});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&dev.yid){keepAwake();sendLatest()}});
+addEventListener('beforeunload',e=>{if(dev.yid){e.preventDefault();e.returnValue=''}});
+setInterval(()=>{if(!$('#v-dev').hidden)kv()},5000);
+
+function v6route(n=0){const v=(location.hash||'#home').slice(1);if(v!=='map'&&v!=='device')return;
+  const sec=$(v==='map'?'#v-osm':'#v-dev');if(sec.hidden){if(n<20)setTimeout(()=>v6route(n+1),100);return}
+  if(v==='map')needL(()=>{initOsm();setTimeout(()=>osm.invalidateSize(),0);osmFitted=false;updateOsm();renderOsmList()});
+  else renderDev()}
+addEventListener('hashchange',()=>setTimeout(v6route,0));setTimeout(v6route,0);
 })();
 </script>
 </body></html>

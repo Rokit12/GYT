@@ -11,6 +11,12 @@ Rules:
   * if AIS disagrees with GPS by more than max_spread_m it is flagged as possible spoofing,
     and SAR becomes required
   * SAR length estimate, when present, must be within 20% of the registered LOA
+
+Yachts without tracking hardware: a fix from a signed-in phone or laptop ('device') may stand in
+for signed GPS when there is no signed GPS fix at all. It must be a good fix (precise, no
+impossible jumps), and AIS or SAR must still agree with it, exactly as for GPS. The result then
+says primary='device' and assurance='standard' instead of 'high', so anyone reading the proof
+can see it rests on a signed-in device rather than sealed hardware.
 """
 from __future__ import annotations
 
@@ -33,7 +39,7 @@ def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 @dataclass
 class Obs:
-    source: str  # ais | gps | sar
+    source: str  # ais | gps | sar | device
     lat: float
     lon: float
     observed_at: datetime
@@ -57,6 +63,8 @@ class FusionResult:
     spoofing_suspected: bool
     reasons: list[str] = field(default_factory=list)
     digest: str = ""  # hex sha256 of the canonical record; goes into the arrival leaf
+    primary: str = "gps"  # which source the proof rests on: gps (hardware) or device (phone/laptop)
+    assurance: str = "high"  # high = signed hardware GPS, standard = signed-in device
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -71,9 +79,15 @@ def fuse_arrival(
     ais: Obs | None,
     sar: Obs | None,
     max_spread_m: float = 1500,
+    device: Obs | None = None,
 ) -> FusionResult:
     reasons: list[str] = []
     sig: dict[str, Signal] = {}
+    primary, assurance = "gps", "high"
+    if gps is None and device is not None:
+        # No hardware on board: the signed-in device takes GPS's place, at a lower assurance level.
+        primary, assurance = "device", "standard"
+        gps = Obs("device", device.lat, device.lon, device.observed_at, device.verified)
 
     def at_target(o: Obs) -> float:
         return haversine_m(o.lat, o.lon, target_lat, target_lon)
@@ -85,12 +99,18 @@ def fuse_arrival(
     else:
         d = at_target(gps)
         ok = gps.verified and d <= radius_m
-        note = "" if gps.verified else "Signature not verified"
+        if primary == "device":
+            note = "" if gps.verified else "Device fix not precise enough"
+        else:
+            note = "" if gps.verified else "Signature not verified"
         if gps.verified and d > radius_m:
             note = f"Outside {radius_m:.0f} m arrival radius"
-        sig["gps"] = Signal("gps", True, ok, d, note)
+        sig["gps"] = Signal(primary, True, ok, d, note)
         if not ok:
-            reasons.append("GPS_NOT_AT_TARGET" if gps.verified else "GPS_UNSIGNED")
+            if primary == "device":
+                reasons.append("DEVICE_NOT_AT_TARGET" if gps.verified else "DEVICE_FIX_TOO_VAGUE")
+            else:
+                reasons.append("GPS_NOT_AT_TARGET" if gps.verified else "GPS_UNSIGNED")
 
     spoof = False
     if ais is None:
@@ -121,6 +141,7 @@ def fuse_arrival(
     signals = [sig["ais"], sig["gps"], sig["sar"]]
     record = {
         "target": [round(target_lat, 6), round(target_lon, 6), radius_m],
+        **({"primary": "device"} if primary == "device" else {}),
         "obs": {
             o.source: [round(o.lat, 6), round(o.lon, 6), o.observed_at.isoformat(), o.verified, o.est_length_m]
             for o in (gps, ais, sar)
@@ -129,4 +150,4 @@ def fuse_arrival(
         "arrived": arrived,
     }
     digest = hashlib.sha256(json.dumps(record, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    return FusionResult(arrived, signals, spoof, reasons, digest)
+    return FusionResult(arrived, signals, spoof, reasons, digest, primary, assurance)

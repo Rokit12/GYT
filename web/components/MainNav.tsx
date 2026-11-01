@@ -8,10 +8,12 @@ const ICON: Record<string, React.ReactNode> = {
   track: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="2.2" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /></svg>,
   verify: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l7 3v5c0 4.6-3 8.2-7 10-4-1.8-7-5.4-7-10V6z" /><path d="M8.6 12.2l2.4 2.4 4.6-4.8" /></svg>,
   earn: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3" /></svg>,
+  phone: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.2" /><path d="M11 18.5h2" /><path d="M12 7.2a2.4 2.4 0 0 1 2.4 2.4c0 1.8-2.4 4-2.4 4s-2.4-2.2-2.4-4A2.4 2.4 0 0 1 12 7.2z" /></svg>,
   list: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="2" /><path d="M12 7v13M5 13a7 7 0 0 0 14 0M8 11h8" /></svg>,
 };
 const PLATFORM = [
   { href: "/track", icon: "track", t: "Track & verify", d: "Follow a yacht live and check every record it leaves." },
+  { href: "/track/device", icon: "phone", t: "Track from your phone", d: "No tracker on board? Share your phone's location as the yacht's." },
   { href: "/verify", icon: "verify", t: "Verify a record", d: "Paste any hash. Your browser checks it against the chain." },
   { href: "/earn", icon: "earn", t: "Use or Earn", d: "Turn ownership units into nights aboard, or into income." },
   { href: "/onboard", icon: "list", t: "List your yacht", d: "Get a verified passport and three-signal tracking." },
@@ -24,7 +26,7 @@ export default function MainNav({ isAdmin, signedIn = false }: { isAdmin: boolea
   const [drawer, setDrawer] = useState(false);
   const [mega, setMega] = useState(false);
   const hoverT = useRef<ReturnType<typeof setTimeout>>();
-  const on = (h: string) => (h === "/" ? path === "/" : path.startsWith(h));
+  const on = (h: string) => (h === "/" ? path === "/" : h === "/track" ? path === "/track" : path.startsWith(h));
   const platOn = PLATFORM.some((p) => on(p.href));
   const desk = () => window.matchMedia("(min-width: 921px)").matches;
 
@@ -89,6 +91,7 @@ export default function MainNav({ isAdmin, signedIn = false }: { isAdmin: boolea
       >
         <ul className="nav-list">
           {link("/yachts", "Explore yachts")}
+          {link("/map", "Map")}
           {link("/how-it-works", "How it works")}
           <li className={`has-mega ${mega ? "open" : ""}`}>
             <button className="nl" type="button" aria-expanded={mega} aria-controls="mega-platform" aria-current={platOn ? "page" : undefined} onClick={() => setMega(!mega)}>
@@ -104,12 +107,12 @@ export default function MainNav({ isAdmin, signedIn = false }: { isAdmin: boolea
                   </Link>
                 ))}
               </div>
-              <Link className="mega-feature" href="/yachts?view=map">
+              <Link className="mega-feature" href="/map">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/media/yachts/YACHT-000002.jpg" alt="" loading="lazy" />
                 <span className="eyebrow">Live now</span>
                 <b>See every yacht on the map</b>
-                <span className="small">Gliding markers, trails and partner marinas</span>
+                <span className="small">OpenStreetMap, live positions and trails</span>
               </Link>
             </div>
           </li>

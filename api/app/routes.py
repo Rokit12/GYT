@@ -165,7 +165,8 @@ def track_and_hashes(yacht_id: str, hours: int = Query(48, ge=1, le=24 * 30), db
     y = row_or_404(db.execute(text("SELECT id, name, mmsi, twin_status, twin_tx, twin_token_id FROM yachts WHERE id=:i AND retired_at IS NULL"),
                               {"i": yacht_id}).mappings().first(), "Yacht")
     pts = db.execute(
-        text("""SELECT source, observed_at, ST_Y(location::geometry) lat, ST_X(location::geometry) lon, verified
+        text("""SELECT source, observed_at, ST_Y(location::geometry) lat, ST_X(location::geometry) lon, verified,
+                       accuracy_m, sog_kn
                 FROM positions WHERE yacht_id=:i AND observed_at > now() - make_interval(hours => :h)
                 ORDER BY observed_at"""),
         {"i": yacht_id, "h": hours},
@@ -387,7 +388,8 @@ def prove_arrival(ref: str, db: Session = Depends(get_db)):
         r = db.execute(
             text(
                 """SELECT ST_Y(location::geometry) lat, ST_X(location::geometry) lon, observed_at, verified, est_length_m
-                   FROM positions WHERE yacht_id=:y AND source=:s AND observed_at >= :w ORDER BY observed_at DESC LIMIT 1"""
+                   FROM positions WHERE yacht_id=:y AND source=:s AND observed_at >= :w
+                   ORDER BY verified DESC, observed_at DESC LIMIT 1"""
             ),
             {"y": bk["yacht_id"], "s": src, "w": window},
         ).first()
@@ -396,6 +398,7 @@ def prove_arrival(ref: str, db: Session = Depends(get_db)):
     res = fusion.fuse_arrival(
         bk["mlat"], bk["mlon"], bk["arrival_radius_m"], float(bk["loa_m"]),
         gps=latest("gps"), ais=latest("ais"), sar=latest("sar"), max_spread_m=s.fusion_max_spread_m,
+        device=latest("device") if s.device_counts_for_arrival else None,
     )
     out = res.as_dict()
     if not res.arrived:
@@ -403,7 +406,7 @@ def prove_arrival(ref: str, db: Session = Depends(get_db)):
     leaf = proof.arrival_leaf(
         proof.to_bytes32(ref), int(bk["twin_token_id"] or 0), proof.to_bytes32(bk["marina_id"]), bytes.fromhex(res.digest)
     )
-    gps = next(x for x in res.signals if x.source == "gps")
+    gps = next(x for x in res.signals if x.source == res.primary)
     ev = record_event(
         db, bk["yacht_id"], "ARRIVAL_PROOF", marina_id=bk["marina_id"], payload={"booking": ref, **out}, leaf=leaf,
     )
@@ -642,14 +645,16 @@ def live_fleet(trail_minutes: int = Query(120, ge=0, le=24 * 60), db: Session = 
     rows = db.execute(
         text(
             """SELECT y.id, y.name, y.mmsi, y.loa_m, y.insurance_verified, m.name AS home,
-                      p.source, p.observed_at, ST_Y(p.location::geometry) lat, ST_X(p.location::geometry) lon, p.sog_kn, p.cog_deg,
+                      p.source, p.observed_at, p.accuracy_m, p.verified, ST_Y(p.location::geometry) lat, ST_X(p.location::geometry) lon, p.sog_kn, p.cog_deg,
                       (SELECT ST_AsGeoJSON(ST_MakeLine(q.location::geometry ORDER BY q.observed_at))::json FROM positions q
                         WHERE q.yacht_id = y.id AND q.source = p.source
                           AND q.observed_at > p.observed_at - make_interval(mins => :tm)) AS trail
                FROM yachts y
                JOIN marinas m ON m.id = y.home_marina_id
-               JOIN LATERAL (SELECT * FROM positions WHERE yacht_id = y.id AND source IN ('gps','ais')
-                             ORDER BY (source = 'gps') DESC, observed_at DESC LIMIT 1) p ON TRUE
+               JOIN LATERAL (SELECT * FROM positions WHERE yacht_id = y.id AND source IN ('gps','device','ais')
+                               AND (source <> 'device' OR observed_at > now() - interval '7 days')
+                             ORDER BY (source = 'gps' AND observed_at > now() - interval '6 hours') DESC, observed_at DESC
+                             LIMIT 1) p ON TRUE
                WHERE y.twin_status = 'minted' AND y.retired_at IS NULL"""
         ),
         {"tm": trail_minutes},
@@ -671,7 +676,8 @@ def live_fleet(trail_minutes: int = Query(120, ge=0, le=24 * 60), db: Session = 
                 "id": r["id"], "name": r["name"], "mmsi": r["mmsi"], "loa_m": float(r["loa_m"]), "home": r["home"],
                 "source": r["source"], "observed_at": r["observed_at"].isoformat(),
                 "age_s": round((now - r["observed_at"]).total_seconds()), "sog": r["sog_kn"], "cog": cog,
-                "insured": r["insurance_verified"], "trail": trail["coordinates"] if trail and trail_minutes else None,
+                "insured": r["insurance_verified"], "accuracy_m": r["accuracy_m"], "good": r["verified"],
+                "trail": trail["coordinates"] if trail and trail_minutes else None,
             },
         })
     return {"type": "FeatureCollection", "features": feats}
