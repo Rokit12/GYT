@@ -183,6 +183,39 @@ Fleet yachts heard on either feed are also stored as `ais` positions, so fusion 
 see them. AIS keys stay on the server; the browser only talks to the GYT API. Swap the basemap with
 `NEXT_PUBLIC_MAP_STYLE` / `NEXT_PUBLIC_MAP_STYLE_DARK` (these are read at build time).
 
+## Yacht map (OpenStreetMap)
+
+`/map` shows every verified yacht's latest position on an OpenStreetMap map (Leaflet,
+`web/components/OsmMap.tsx`), with a searchable list, filters by source (hardware GPS, phone, AIS),
+trails, and popups linking to the passport and tracker. Passports have a **See on map** button.
+Tiles come from `tile.openstreetmap.org`, which is free for light use with attribution; for real
+traffic set `NEXT_PUBLIC_OSM_TILES` to another OpenStreetMap tile host or your own tile server.
+
+## Tracking without hardware: Track from this device
+
+A yacht with no GPS tracker fitted can be tracked from the owner's or captain's phone or laptop.
+Open **Track from your phone** (`/track/device`), choose the yacht and press **Start sharing**. While the
+page is open, the browser's location is sent as the yacht's position every 10 seconds.
+
+* **Who can share:** the yacht's owner, crew the owner adds by email (on the same page), and admins.
+* **Stored as** `positions.source = 'device'`, with the device's reported accuracy and the sharing
+  session it came from (`device_sessions`). Starting and stopping each record a hashed event.
+* **Checks** (`api/app/devices.py`): fixes vaguer than 1 km are refused; one fix per 10 s per
+  session; clock-ahead and stale fixes are refused; jumps faster than 60 kn are stored but flagged.
+  Fixes within 100 m with no flags count as good. All limits are `DEVICE_*` settings.
+* **No signal at sea:** fixes wait in the browser and upload in one batch (`/device/fixes`) when the
+  connection returns. At anchor, the last reading is re-sent once a minute so the yacht doesn't go quiet.
+* **Trust level:** a phone fix is tied to a signed-in account, not sealed hardware. On the map it is
+  labelled *Phone or laptop*. For an arrival proof, a good phone fix can stand in for signed GPS only
+  when the yacht has no signed GPS fix, and AIS or satellite radar must still agree; the proof then
+  says `primary: device`, `assurance: standard`.
+* **Limits of the web:** phones pause location for web pages when the screen locks or the browser
+  is in the background, so keep the page open, the screen on (the page asks to keep it awake) and
+  the phone charging. Location needs HTTPS.
+
+API: `GET /me/trackable`, `POST /yachts/{id}/device/start|fix|fixes|stop`,
+`GET /yachts/{id}/device/sessions`, `GET|POST /yachts/{id}/crew`, `DELETE /yachts/{id}/crew/{user_id}`.
+
 ## Hero video and imagery
 
 `web/public/media/hero-yacht.mp4` (12 s seamless loop, 1280×720, H.264, 1.8 MB) and the yacht photos in

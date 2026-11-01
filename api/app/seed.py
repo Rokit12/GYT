@@ -88,7 +88,7 @@ KEYS_FILE = Path(__file__).resolve().parent.parent / "tracker_keys.json"
 def reset():
     with engine.begin() as c:
         c.exec_driver_sql(
-            "DROP TABLE IF EXISTS schema_migrations, yacht_photos, valuations, follows, audit_log, chain_txs, bank_accounts, users, credit_spend, holdings, investors, bookings, anchors, events, positions, trackers, "
+            "DROP TABLE IF EXISTS schema_migrations, device_sessions, yacht_crew, yacht_photos, valuations, follows, audit_log, chain_txs, bank_accounts, users, credit_spend, holdings, investors, bookings, anchors, events, positions, trackers, "
             "documents, compliance_config, yachts, berths, marinas CASCADE"
         )
 

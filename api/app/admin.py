@@ -82,7 +82,12 @@ def monitoring(db: Session = Depends(get_db), who=Depends(require_admin)):
     for d in data:
         f = d["last_fix"] or {}
         alerts = []
-        if "gps" not in f:
+        if "gps" not in f and "device" in f:
+            if f["device"]["age_min"] > 60:
+                alerts.append(("warn", f"No hardware GPS; phone tracking silent for {int(f['device']['age_min'])} min"))
+            else:
+                alerts.append(("info", "Tracked from a signed-in phone or laptop (no hardware GPS)"))
+        elif "gps" not in f:
             alerts.append(("warn", "No signed GPS fix yet"))
         elif f["gps"]["age_min"] > 60:
             alerts.append(("warn", f"GPS silent for {int(f['gps']['age_min'])} min"))
