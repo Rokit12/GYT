@@ -3274,7 +3274,7 @@ document.addEventListener('click',async e=>{if(!e.target.closest('#suWizard'))re
     a.disabled=true;a.textContent='Creating your account…';const id=Math.max(...ACCOUNTS.map(x=>x.id))+1;const invite=f.join==='invite'?DEMO_INVITES[f.code.trim().toUpperCase()]:null;
     const checks=f.join==='owner'?wzChecks(f):[];const status=invite?'active':'pending';
     ACCOUNTS.push({id,name:f.name.trim(),email,pw:await pwHash(email,f.pw),role:'client',status,inv:null,wallet:null,joined:new Date().toISOString().slice(0,10),phone:f.phone.trim()||null,country:f.country||null,interests:[...f.interests],follows:invite&&invite.yacht?[invite.yacht]:[],notify:{arrivals:true,ais_gaps:true,documents:true,bookings:true,payouts:true,weekly:false},
-      joined_via:f.join,claim:f.join==='owner'?{vessel:f.vName.trim(),flag:f.vFlag,loa:+f.vLoa,mmsi:f.vMmsi.trim(),imo:f.vImo.trim(),reg:f.vReg.trim(),doc:f.doc,checks}:null,crewOf:invite&&invite.yacht||null});saveAccounts();
+      joined_via:f.join,claim:f.join==='owner'?{vessel:f.vName.trim(),flag:f.vFlag,flagName:(COUNTRIES.find(c=>c[0]===f.vFlag)||[0,f.vFlag])[1],loa:+f.vLoa,mmsi:f.vMmsi.trim(),imo:f.vImo.trim(),reg:f.vReg.trim(),doc:f.doc,checks}:null,crewOf:invite&&invite.yacht||null});saveAccounts();
     window.gytAutopilotLog&&gytAutopilotLog('registrations',f.join==='owner'?(checks.every(c=>c.ok)?'recommend_approve':'needs_review'):'done',f.join==='owner'?`${f.name.trim()} (${f.vName.trim()}): ${checks.every(c=>c.ok)?'every check passed, recommend approval':'needs review: '+checks.filter(c=>!c.ok).map(c=>c.msg).join('; ')}`:`${f.name.trim()} joined with an invite from ${invite.by}`);
     session={email};store.set('gyt-session',session);const dest=afterSignIn&&!ADMIN_V.includes(afterSignIn)&&afterSignIn!=='signup'?afterSignIn:'account';afterSignIn=null;
     WZ.done={first:f.name.trim().split(' ')[0],join:f.join,by:invite&&invite.by,checks,status,dest};WZ.dir=1;WZ.step=3;renderWz();renderNav();WZ.f=WZ0()}});
@@ -3634,7 +3634,7 @@ const SAMPLE_REGS=[
  {name:'R. Castell',email:'rc@example.com',vessel:'Kilindini Star',flag:'Kenya',loa:28,mmsi:'634009871',imo:'',reg:'KE-MSA-1180',checks:[[1,'MMSI 634009871 is valid for Kenya'],[0,'MMSI already belongs to Kilindini Star (YACHT-000003)'],[1,'Registry document received (#a91c07e2f4)']],ai:'Owner name on the certificate differs from the account name'}];
 let lastRun=null;
 window.renderAuto=function(){if($('#v-auto').hidden)return;
-  const regs=[...SAMPLE_REGS.filter(r=>!r.approved),...ACCOUNTS.filter(a=>a.claim&&a.status==='pending').map(a=>({name:a.name,email:a.email,vessel:a.claim.vessel,flag:(COUNTRIES.find(c=>c[0]===a.claim.flag)||[0,a.claim.flag])[1],loa:a.claim.loa,mmsi:a.claim.mmsi,imo:a.claim.imo,reg:a.claim.reg,checks:a.claim.checks.map(c=>[c.ok?1:0,c.msg]),ai:a.claim.checks.every(c=>c.ok)?'Certificate matches the claim':'',acct:a}))];
+  const regs=[...SAMPLE_REGS.filter(r=>!r.approved),...ACCOUNTS.filter(a=>a.claim&&a.status==='pending').map(a=>({name:a.name,email:a.email,vessel:a.claim.vessel,flag:a.claim.flagName||a.claim.flag,loa:a.claim.loa,mmsi:a.claim.mmsi,imo:a.claim.imo,reg:a.claim.reg,checks:a.claim.checks.map(c=>[c.ok?1:0,c.msg]),ai:a.claim.checks.every(c=>c.ok)?'Certificate matches the claim':'',acct:a}))];
   const ready=regs.filter(r=>r.checks.every(c=>c[0])).length;
   const open=APLOG.filter(l=>!l.resolved&&l.outcome==='flagged').length;
   $('#apLast').textContent=lastRun?new Date(lastRun).toLocaleTimeString():'not yet';
