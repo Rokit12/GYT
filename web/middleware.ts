@@ -4,7 +4,7 @@ import { COOKIE, readSession } from "@/lib/session";
 // Page access. The API enforces the same rules on every call; this only routes people.
 // Signed-out visitors to a client feature see what it is first (a preview page at the same URL),
 // with sign-up and sign-in buttons, instead of being bounced straight to the sign-in form.
-const PREVIEW: Record<string, string> = { "/track/device": "device", "/track": "track", "/earn": "earn", "/onboard": "onboard", "/account": "account" };
+const PREVIEW: Record<string, string> = { "/track/device": "device", "/track": "track", "/earn": "earn", "/onboard": "onboard", "/berths": "berths", "/account": "account" };
 const ADMIN = ["/admin"];
 
 export async function middleware(req: NextRequest) {
@@ -30,4 +30,4 @@ export async function middleware(req: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = { matcher: ["/earn/:path*", "/track/:path*", "/onboard/:path*", "/account/:path*", "/admin/:path*"] };
+export const config = { matcher: ["/berths/:path*", "/earn/:path*", "/track/:path*", "/onboard/:path*", "/account/:path*", "/admin/:path*"] };

@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .config import get_settings
+from .vessel import VesselClaim
 from .db import get_db
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -154,6 +155,10 @@ class SignUpIn(BaseModel):
     country: str | None = Field(default=None, min_length=2, max_length=2)
     interests: list[str] = Field(default_factory=list, max_length=5)
     follow: list[str] = Field(default_factory=list, max_length=20)
+    # How they are joining (required unless REGISTRATION_MODE=open): see registration.py
+    join_as: str | None = Field(default=None, pattern="^(owner|invite)$")
+    vessel: VesselClaim | None = None
+    invite_code: str | None = Field(default=None, max_length=20)
 
 
 class SignInIn(BaseModel):
@@ -167,25 +172,42 @@ def _session(u: User) -> dict:
 
 @router.post("/signup", status_code=201)
 def signup(body: SignUpIn, db: Session = Depends(get_db)):
+    from .registration import after_signup, check_claim_format, use_invite
+
     probs = password_problems(body.password)
     if probs:
         raise HTTPException(422, "Password needs " + ", ".join(probs))
+    mode = get_settings().registration_mode
+    join_as, invite = body.join_as, None
+    if mode != "open" and join_as is None:
+        raise HTTPException(422, "GYT accounts are for yacht owners and people they invite. "
+                                 "Add your yacht's details, or enter the invite code you were given.")
+    if join_as == "owner":
+        if body.vessel is None:
+            raise HTTPException(422, "Tell us about your yacht: name, flag, length, MMSI or IMO, and registry number")
+        check_claim_format(body.vessel)
+    elif join_as == "invite":
+        if not body.invite_code:
+            raise HTTPException(422, "Enter your invite code")
+        invite = use_invite(db, body.invite_code, body.email)
+    status = "active" if invite else "pending"
     try:
         from .account import INTERESTS, follow_yachts
         uid = db.execute(
-            text("""INSERT INTO users (email,name,password_hash,role,status,phone,country,interests)
-                    VALUES (:e,:n,:h,'client','pending',:p,:c,:i) RETURNING id"""),
-            {"e": body.email.lower(), "n": body.name.strip(), "h": hash_password(body.password),
+            text("""INSERT INTO users (email,name,password_hash,role,status,phone,country,interests,joined_via)
+                    VALUES (:e,:n,:h,'client',:st,:p,:c,:i,:j) RETURNING id"""),
+            {"e": body.email.lower(), "n": body.name.strip(), "h": hash_password(body.password), "st": status,
              "p": (body.phone or "").strip() or None, "c": body.country.upper() if body.country else None,
-             "i": sorted(set(body.interests) & INTERESTS)},
+             "i": sorted(set(body.interests) & INTERESTS), "j": join_as or "open"},
         ).scalar_one()
         if body.follow:
             follow_yachts(db, uid, body.follow)
+        after_signup(db, uid, body.email, join_as or "open", body.vessel, invite)
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(409, "An account with this email already exists. Sign in instead.")
-    return _session(User(uid, body.email.lower(), body.name.strip(), "client", None, "pending"))
+    return _session(User(uid, body.email.lower(), body.name.strip(), "client", None, status))
 
 
 @router.post("/login")
@@ -229,3 +251,4 @@ def ensure_admin(db: Session, email: str, password: str, name: str = "GYT Admin"
 
 def new_secret() -> str:
     return secrets.token_urlsafe(48)
+

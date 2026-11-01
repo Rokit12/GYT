@@ -4,10 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const GROUPS: [string, [string, string][]][] = [
-  ["Overview", [["/admin", "Dashboard"], ["/admin/monitoring", "Yacht monitoring"]]],
+  ["Overview", [["/admin", "Dashboard"], ["/admin/autopilot", "Autopilot (AI)"], ["/admin/monitoring", "Yacht monitoring"]]],
   ["Registry", [["/admin/yachts", "Yachts & minting"], ["/admin/hashes", "Hashes & addresses"]]],
   ["People & money", [["/admin/users", "Users & approvals"], ["/admin/investors", "Investors & KYC"], ["/admin/banking", "Banking details"]]],
-  ["Operations", [["/admin/operations", "Bookings & escrow"], ["/admin/marinas", "Marinas & berths"]]],
+  ["Operations", [["/admin/berths", "Berth board"], ["/admin/operations", "Bookings & escrow"], ["/admin/marinas", "Marinas & berths"]]],
   ["Records", [["/admin/audit", "Audit log"], ["/admin/docs", "Documentation"]]],
 ];
 

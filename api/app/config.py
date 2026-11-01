@@ -50,6 +50,20 @@ class Settings(BaseSettings):
     device_max_speed_kn: float = 60  # faster jumps between fixes are stored but flagged
     device_counts_for_arrival: bool = True  # a good device fix may stand in for signed GPS (needs AIS or SAR too)
 
+    # Berth finding
+    berth_hold_minutes: int = 10  # how long a yacht can hold a berth while the owner confirms
+    berth_snug_margin_m: float = 1.0  # a fit with less spare length than this is shown as "snug"
+
+    # Who can create an account: "owners_and_invites" (yacht owners with proof, or invited people) or "open"
+    registration_mode: str = "owners_and_invites"
+    invite_days: int = 14
+
+    # Autopilot: automated checks. AI (Claude) is optional and only advises; the rules decide.
+    autopilot_interval_seconds: int = 120  # 0 = only when an admin presses Run
+    autopilot_auto_approve: bool = False  # approve owners automatically when every check passes
+    anthropic_api_key: str = ""
+    ai_model: str = "claude-sonnet-5-5"
+
     # Use or Earn
     credit_rate: float = 0.06
     holder_discount: float = 0.85

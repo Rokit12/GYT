@@ -33,6 +33,17 @@ const FEATURES: Record<string, F> = {
     steps: [["Create a free account", "Name, email and a password."], ["List your yacht, or be added as crew", "Owners list the yacht; captains are added by the owner."], ["Open Track from this device", "Press Start and keep the page open."]],
     demo: "map",
   },
+  berths: {
+    eyebrow: "Find a berth", title: "The right berth for your yacht, held the moment you pick it.", img: "YACHT-000001",
+    lede: "See every berth at a marina drawn to scale against your yacht. Hold the one you want and every other yacht sees it's taken, instantly. Pay into escrow; the marina is paid when your arrival is proven.",
+    time: "For yacht owners and their crew",
+    perks: [["⇔", "Sized to your yacht", "Length, beam and draft are checked. You're never offered a berth you don't fit."],
+      ["★", "Best fit first", "The smallest berth that fits, so big berths stay free for big yachts."],
+      ["⏱", "Live holds", "Pick a berth and it's held for you; others see it as taken straight away."],
+      ["⛨", "Escrowed payment", "Your money waits in escrow until three signals prove you arrived."]],
+    steps: [["Join as an owner or crew", "Owners show their yacht's papers; crew are invited."], ["Pick dates and a marina", "Every berth shows whether you fit."], ["Hold, then confirm", "Your hold blocks others while you pay into escrow."]],
+    demo: "map",
+  },
   earn: {
     eyebrow: "Use or Earn", title: "Own a share of a yacht, then use it or earn from it.", img: "YACHT-000007",
     lede: "Units give you a stake in one yacht's company. Each year, spend their credits on nights aboard any verified yacht, or pool them and share charter income.",

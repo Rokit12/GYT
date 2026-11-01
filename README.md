@@ -216,6 +216,55 @@ page is open, the browser's location is sent as the yacht's position every 10 se
 API: `GET /me/trackable`, `POST /yachts/{id}/device/start|fix|fixes|stop`,
 `GET /yachts/{id}/device/sessions`, `GET|POST /yachts/{id}/crew`, `DELETE /yachts/{id}/crew/{user_id}`.
 
+## Berths that fit, with live holds
+
+`/berths` (**Find a berth** in the Platform menu) shows every berth at a marina drawn to scale against the
+chosen yacht, with the yacht's outline in the selected berth.
+
+* **Fit is a hard rule** (`api/app/berths.py`): length (LOA) and beam must be within the berth's maximums,
+  and draft within the berth's depth when both are known. A berth that is too small is never offered.
+* **Best fit first:** among berths that fit, the one with the least spare length, so big berths stay free
+  for big yachts.
+* **Live holds:** picking a berth places a 10-minute hold (`BERTH_HOLD_MINUTES`). Every other yacht sees
+  it as "Held by another yacht (28 m)" at once (the page refreshes every 3 s); names are never shown.
+  Holding locks the berth row, and an exclusion constraint on `berth_holds` (plus the existing one on
+  `bookings`) means two yachts can never hold or book the same berth for overlapping dates.
+* **Confirm** turns the hold into an escrowed booking; payment is released when arrival is proven.
+* **Admin berth board** (`/admin/berths`): every berth, who is in it or holding it (with the countdown),
+  how much of the berth the yacht uses, and anything that does not fit.
+
+API: `GET /berths/availability`, `POST /berths/{id}/hold`, `DELETE /berths/holds/{id}`,
+`POST /berths/holds/{id}/confirm`, `GET /admin/berths/board`.
+
+## Autopilot (automation, with optional AI)
+
+`api/app/autopilot.py` runs every `AUTOPILOT_INTERVAL_SECONDS` (and on **Run now** in `/admin/autopilot`):
+releases expired berth holds, flags bookings whose yacht no longer fits its berth, runs the three-signal
+arrival check for bookings due today (and flags a satellite hull length that does not match), screens
+new owner sign-ups, and, with AI on, writes a short brief for the team. Everything it does is logged
+with the reason (`autopilot_log`).
+
+**AI is optional and advisory.** Set `ANTHROPIC_API_KEY` (and optionally `AI_MODEL`) to have Claude read
+uploaded registry certificates and write the brief (`api/app/ai.py`, structured tool output only). The
+AI can add a reason to review; it never approves accounts, moves money or changes bookings. Rules make
+the final call, and admins approve (or set `AUTOPILOT_AUTO_APPROVE=true` to approve owners whose every
+rule-based check passes). Without a key everything works on rules alone.
+
+## Who can sign up
+
+With `REGISTRATION_MODE=owners_and_invites` (the default), accounts are only for:
+
+* **Yacht owners**, who give the yacht's name, flag, length, MMSI and/or IMO and registry number, and
+  upload the certificate of registry. Checks: MMSI format and country code against the flag, IMO check
+  digit, no other account or yacht using those numbers, and the document (plus the AI reading, if on).
+  The account stays pending until approved.
+* **Invited people**: owners invite their captain or crew to one yacht (Track from your phone →
+  Crew → Create invite code); admins invite investors, marina staff and partners. Codes are single-use,
+  can be locked to one email, and expire after `INVITE_DAYS`.
+
+Browsing yachts, the map and verifying records need no account. Set `REGISTRATION_MODE=open` for local
+development.
+
 ## Hero video and imagery
 
 `web/public/media/hero-yacht.mp4` (12 s seamless loop, 1280×720, H.264, 1.8 MB) and the yacht photos in

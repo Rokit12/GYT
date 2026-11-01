@@ -159,4 +159,4 @@ def test_compliance_preflight_and_kyc(client):
 
 def test_marina_dashboard(client):
     d = client.get("/marinas/MARINA-DXB-001/dashboard").json()
-    assert len(d["berths"]) == 3 and any(a["ref"] == "BK-4098" for a in d["arrivals"])
+    assert len(d["berths"]) == 8 and any(a["ref"] == "BK-4098" for a in d["arrivals"])
