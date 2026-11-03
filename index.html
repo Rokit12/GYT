@@ -4067,6 +4067,13 @@ window.createMarina3D = function createMarina3D(THREE, el, opts = {}) {
     },
     select(code) { state.selected = code; placeMine(); const s = slots.find(r => r.code === code); if (s) { cam.tx += (s.cx - cam.tx) * 0.6; } wake(); },
     dock,
+    /** Where a berth sits on screen (client px), or null: used for guided tours and tests. */
+    screenOf(code) {
+      const s = slots.find(r => r.code === code); if (!s) return null;
+      const v = new THREE.Vector3(); s.mesh.getWorldPosition(v); v.project(camera);
+      const r = canvas.getBoundingClientRect();
+      return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height };
+    },
     resetView() { frameAll(); cam.auto = !reduce; wake(); },
     dispose() {
       cancelAnimationFrame(raf); if (ro) ro.disconnect(); if (io) io.disconnect();
@@ -4093,7 +4100,7 @@ function sync3dBerths(){if($('#v-berths').hidden||bfView!=='3d')return;const sc=
   when3D(()=>{if(!m3b)m3b=mk($('#bf3d'),code=>{const S=gytBerthState();S.setSel(S.Q.marina+'|'+code)});lastB=sig;m3b.set(sc)})}
 function setBfView(v){bfView=v;try{localStorage.setItem('gyt.berthview',v)}catch(_){}$('#bf3d').hidden=v!=='3d';$('#bfDraw').hidden=v==='3d';$('#bfViewSeg').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.bv===v)));lastB='';sync3dBerths()}
 $('#bfViewSeg').addEventListener('click',e=>{const b=e.target.closest('[data-bv]');if(b)setBfView(b.dataset.bv)});
-window.gyt3dDock=code=>{if(bfView==='3d'&&m3b){lastB='';setTimeout(()=>{sync3dBerths();m3b.dock(code)},50)}};
+window.gyt3d={berths:()=>m3b,board:()=>m3a};window.gyt3dDock=code=>{if(bfView==='3d'&&m3b){lastB='';setTimeout(()=>{sync3dBerths();m3b.dock(code)},50)}};
 const _rb=window.renderBerths;window.renderBerths=function(f){_rb(f);sync3dBerths()};
 setBfView(bfView);
 // admin board
