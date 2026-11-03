@@ -155,6 +155,8 @@ const CSS = `
 @media (max-width:900px){.bp-grid{grid-template-columns:minmax(0,1fr)}}
 .bp-pane{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);min-width:0}
 .bp-pane h4{margin:0;padding:10px 12px;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.bp-pane h4 label{text-transform:none;letter-spacing:0;font-weight:500;white-space:nowrap}
+.bp-pane h4 input[type=checkbox]{width:auto;min-width:0;margin:0;padding:0}
 .bp-plan{position:relative;background:var(--surface2);touch-action:none;user-select:none;-webkit-user-select:none}
 .bp-plan img{display:block;width:100%;height:auto;pointer-events:none}
 .bp-plan svg{position:absolute;inset:0;width:100%;height:100%}
