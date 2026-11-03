@@ -1041,10 +1041,11 @@ tr.avail-row td { color: var(--muted); font-style: italic; }
 <aside class="admin-nav" id="adminSide" hidden aria-label="Admin console">
   <div><div class="eyebrow">Overview</div><a href="#admin">Dashboard</a><a href="#autopilot">Autopilot (AI)</a><a href="#monitoring">Yacht monitoring</a></div>
   <div><div class="eyebrow">Registry</div><a href="#yachts">Yachts &amp; minting</a><a href="#hashes">Hashes &amp; addresses</a></div>
-  <div><div class="eyebrow">People &amp; money</div><a href="#users">Users &amp; approvals</a><a href="#investors">Investors &amp; KYC</a><a href="#banking">Banking details</a></div>
+  <div><div class="eyebrow">People &amp; money</div><a href="#users">Users &amp; approvals</a><a href="#admins">Admins &amp; rights</a><a href="#investors">Investors &amp; KYC</a><a href="#banking">Banking details</a></div>
   <div><div class="eyebrow">Operations</div><a href="#berthboard">Berth board</a><a href="#berthplan">Berth plan to 3D</a><a href="#operations">Bookings &amp; escrow</a><a href="#marinas">Marinas &amp; berths</a></div>
   <div><div class="eyebrow">Records</div><a href="#audit">Audit log</a></div>
   <div><div class="eyebrow">Documentation · internal</div><a href="#docs-revenue">Revenue model</a><a href="#docs-tracking">Tracking stack</a><a href="#docs-research">What to tokenize</a></div>
+  <p class="small muted" id="adminRole" style="margin:10px 0 0"></p>
   <div class="chain small"><span class="dot"></span><span id="chainStat">Proof chain · block —</span></div>
 </aside>
 <div class="views">
@@ -1400,6 +1401,13 @@ tr.avail-row td { color: var(--muted); font-style: italic; }
   <div class="row" style="justify-content:space-between;align-items:flex-end"><div><div class="eyebrow">People</div><h1>Users &amp; approvals</h1></div>
     <div class="seg" role="group" aria-label="Filter" id="usSeg"><button type="button" data-f="" aria-pressed="true">All</button><button type="button" data-f="pending">Pending</button><button type="button" data-f="active">Active</button><button type="button" data-f="suspended">Suspended</button></div></div>
   <div class="panel tbl"><table><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Investor</th><th>Joined</th><th>Actions</th></tr></thead><tbody id="usRows"></tbody></table></div>
+</section>
+
+<section class="view" id="v-admins" data-view="admins" hidden>
+  <div class="row" style="justify-content:space-between;align-items:flex-end"><div><div class="eyebrow">People</div><h1>Admins &amp; rights</h1></div><button class="primary" id="admAdd">Add an admin</button></div>
+  <p class="small muted" style="max-width:760px">The <b>primary admin</b> has every right and can&rsquo;t be deleted, suspended or demoted. Secondary admins see and do only what their rights allow; a change applies at once. Only the primary admin manages admins.</p>
+  <div class="panel" id="admNew" hidden></div>
+  <div class="panel tbl"><table><thead><tr><th>Admin</th><th>Rights</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead><tbody id="admRows"></tbody></table></div>
 </section>
 
 <!-- ============ ADMIN: INVESTORS ============ -->
@@ -2413,17 +2421,25 @@ $('#mMoves').addEventListener('click',async e=>{const b=e.target.closest('[data-
 const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(_){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(_){}},del(k){try{localStorage.removeItem(k)}catch(_){}}};
 const pwHash=(email,pw)=>sha('gyt-demo|'+email.toLowerCase()+'|'+pw);
 const SEED_ACCOUNTS=[
- {id:1,name:'GYT Admin',email:'admin@gyt.com',pw:'e76102c4a08d3afc144b8d223f366dfa41ead5e239caf09191697c4b446f47e9',role:'admin',status:'active',inv:null,wallet:null,joined:'2026-10-01'},
+ {id:1,name:'GYT Admin',email:'admin@gyt.com',primary:true,pw:'e76102c4a08d3afc144b8d223f366dfa41ead5e239caf09191697c4b446f47e9',role:'admin',status:'active',inv:null,wallet:null,joined:'2026-10-01'},
  {id:2,name:'Jonas Berg',email:'jonas@example.com',pw:null,role:'client',status:'active',inv:'INV-1043',wallet:'0x9be0d1c4a77e2f35b1a8c6d0e94f3a2b7c1d44f0',joined:'2026-10-12'},
  {id:3,name:'Amina Said',email:'amina@example.com',pw:null,role:'client',status:'pending',inv:null,wallet:null,joined:'2026-10-27'},
  {id:4,name:'Kofi Mensah',email:'kofi@example.com',pw:null,role:'client',status:'pending',inv:null,wallet:null,joined:'2026-10-28'},
+ {id:5,name:'Wanjiku Kamau',email:'ops@gyt.com',pw:'8983a2041408022b46b7ad3bd02b762a2f662f07abfeb3d5b6331ec3c34fed45',role:'admin',rights:['berths','bookings'],status:'active',inv:null,wallet:null,joined:'2026-10-20'},
 ];
 let ACCOUNTS=(()=>{const saved=store.get('gyt-accounts',null);if(!saved)return SEED_ACCOUNTS.map(a=>({...a}));const byEmail=Object.fromEntries(saved.map(a=>[a.email,a]));
-  SEED_ACCOUNTS.forEach(a=>{if(!byEmail[a.email])saved.push({...a})});const adm=saved.find(a=>a.email==='admin@gyt.com');if(adm){adm.pw=SEED_ACCOUNTS[0].pw}return saved})();
+  SEED_ACCOUNTS.forEach(a=>{if(!byEmail[a.email])saved.push({...a})});const adm=saved.find(a=>a.email==='admin@gyt.com');if(adm){Object.assign(adm,{pw:SEED_ACCOUNTS[0].pw,primary:true,role:'admin',status:'active'})}saved.forEach(a=>{if(a!==adm)delete a.primary});return saved})();
 const saveAccounts=()=>store.set('gyt-accounts',ACCOUNTS);
 let session=store.get('gyt-session',null);
 const me=()=>session&&ACCOUNTS.find(a=>a.email===session.email)||null;
 const isAdmin=()=>{const u=me();return !!u&&u.role==='admin'&&u.status==='active'};
+/* admin rights: the primary admin has every right and can't be deleted, suspended or demoted; secondary admins have the rights the primary picks */
+const ADMIN_RIGHTS=[['autopilot','Autopilot (AI)'],['monitoring','Yacht monitoring and tracking'],['registry','Yachts, minting and hashes'],['users','Users and approvals'],['investors','Investors and KYC'],['banking','Banking details'],['berths','Berths, berth plans and marinas'],['bookings','Bookings and escrow'],['audit','Audit log'],['docs','Internal documentation']];
+const rightLabel=k=>(ADMIN_RIGHTS.find(r=>r[0]===k)||[k,k])[1];
+const VIEW_RIGHT={autopilot:'autopilot',monitoring:'monitoring',yachts:'registry',hashes:'registry',users:'users',admins:'primary',investors:'investors',banking:'banking',berthboard:'berths',berthplan:'berths',marinas:'berths',operations:'bookings',audit:'audit','docs-revenue':'docs','docs-tracking':'docs','docs-research':'docs'};
+const isPrimary=()=>{const u=me();return isAdmin()&&!!u.primary};
+const hasRight=r=>{if(!isAdmin())return false;const u=me();if(u.primary)return true;if(r==='primary')return false;return (u.rights||[]).includes(r)};
+const canSee=v=>!VIEW_RIGHT[v]||hasRight(VIEW_RIGHT[v]);
 const AUDIT=[];
 function audit(action,entity,id,detail){const u=me();AUDIT.unshift({at:new Date(),actor:u?u.email:'system',action,entity,id:String(id),detail:detail||{}});}
 const ago=d=>{const s=Math.round((Date.now()-new Date(d))/1000);return s<60?s+' s ago':s<3600?Math.round(s/60)+' min ago':s<86400?Math.round(s/3600)+' h ago':Math.round(s/86400)+' d ago'};
@@ -2465,7 +2481,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button[data-conf
 /* ---------- navigation ---------- */
 const PUBLIC_V=['home','explore','map','how','about','signin','signup'];
 const SIGNED_V=['track','device','berths','earn','onboard','account','settings'];
-const ADMIN_V=['admin','autopilot','berthboard','berthplan','monitoring','yachts','hashes','users','investors','banking','operations','marinas','audit','docs-revenue','docs-tracking','docs-research'];
+const ADMIN_V=['admin','autopilot','berthboard','berthplan','monitoring','yachts','hashes','users','admins','investors','banking','operations','marinas','audit','docs-revenue','docs-tracking','docs-research'];
 const ALL_V=[...PUBLIC_V,...SIGNED_V,...ADMIN_V];
 let afterSignIn=null;
 /* ---------- v4: logo + navigation builder ---------- */
@@ -2521,10 +2537,13 @@ function route(){
   if(SIGNED_V.includes(v)&&!u){afterSignIn=v;document.querySelectorAll('section.view').forEach(x=>x.hidden=x.id!=='v-intro');$('#adminSide').hidden=true;$('#shell').classList.remove('with-side');renderNav();window.renderIntro&&renderIntro(v);window.scrollTo(0,0);return}
   if(ADMIN_V.includes(v)&&!u){afterSignIn=v;$('#siMsg').textContent='Sign in to continue to '+({track:'Track & verify',earn:'Use or Earn',onboard:'List your yacht'}[v]||'the admin console')+'.';location.hash='signin';return}
   if(ADMIN_V.includes(v)&&!isAdmin()){$('#deniedBanner').hidden=false;location.hash='home';return}
+  if(ADMIN_V.includes(v)&&!canSee(v)){const r=VIEW_RIGHT[v];toast(r==='primary'?'Only the primary admin can manage admins and their rights.':`That page needs the ${rightLabel(r)} right. Ask the primary admin to add it.`);location.hash='admin';return}
   if(v!=='home')$('#deniedBanner').hidden=true;
   document.querySelectorAll('section.view').forEach(s=>s.hidden=s.dataset.view!==v);
   const adm=ADMIN_V.includes(v);$('#adminSide').hidden=!adm;$('#shell').classList.toggle('with-side',adm);
   document.querySelectorAll('#adminSide a').forEach(a=>{if(a.getAttribute('href')==='#'+v)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
+  if(adm){document.querySelectorAll('#adminSide a[href^="#"]').forEach(a=>{a.hidden=!canSee(a.getAttribute('href').slice(1))});document.querySelectorAll('#adminSide > div').forEach(g=>{const ls=g.querySelectorAll('a');if(ls.length)g.hidden=[...ls].every(a=>a.hidden)});const rl=$('#adminRole');if(rl){const u=me();rl.textContent=u.primary?'Primary admin · every right':`Admin · ${(u.rights||[]).length} of ${ADMIN_RIGHTS.length} rights`}}
+  if(v==='admins')renderAdmins();
   renderNav();
   if(v==='explore')setTimeout(sizeMap,0);
   if(v==='home')renderHome();
@@ -2648,22 +2667,52 @@ let usFilter='';
 function renderUsers(){
   const u0=me();const list=ACCOUNTS.filter(a=>!usFilter||a.status===usFilter);
   $('#usRows').innerHTML=list.map(a=>`<tr><td><b>${esc(a.name)}</b>${a.id===u0?.id?' <span class="pill info">you</span>':''}<br><span class="small muted">${esc(a.email)}</span></td>
-    <td><span class="pill ${a.role==='admin'?'warn':'info'}">${a.role}</span></td><td><span class="pill ${a.status==='active'?'ok':a.status==='pending'?'warn':'crit'}">${a.status}</span></td>
+    <td><span class="pill ${a.role==='admin'?'warn':'info'}">${a.primary?'primary admin':a.role}</span></td><td><span class="pill ${a.status==='active'?'ok':a.status==='pending'?'warn':'crit'}">${a.status}</span></td>
     <td class="mono small">${a.inv||'—'}</td><td class="small">${a.joined}</td>
-    <td><div class="row" style="gap:6px;flex-wrap:nowrap">${a.status==='pending'?`<button class="sm primary" data-uact="approve" data-uid="${a.id}">Approve</button>`:''}${a.status==='active'?`<button class="sm" data-uact="suspend" data-uid="${a.id}">Suspend</button>`:''}${a.status==='suspended'?`<button class="sm" data-uact="approve" data-uid="${a.id}">Reactivate</button>`:''}
-    <button class="sm" data-uact="edit" data-uid="${a.id}">Edit</button><button class="sm" data-uact="delete" data-uid="${a.id}" data-confirm="Delete user">Delete</button></div></td></tr>`).join('');
+    <td>${a.role==='admin'?(a.primary?'<span class="small muted">Primary admin: can\'t be changed</span>':`<a class="small" href="#admins">${isPrimary()?'Manage in Admins &amp; rights':'Only the primary admin changes admins'}</a>`):`<div class="row" style="gap:6px;flex-wrap:nowrap">${a.status==='pending'?`<button class="sm primary" data-uact="approve" data-uid="${a.id}">Approve</button>`:''}${a.status==='active'?`<button class="sm" data-uact="suspend" data-uid="${a.id}">Suspend</button>`:''}${a.status==='suspended'?`<button class="sm" data-uact="approve" data-uid="${a.id}">Reactivate</button>`:''}
+    <button class="sm" data-uact="edit" data-uid="${a.id}">Edit</button><button class="sm" data-uact="delete" data-uid="${a.id}" data-confirm="Delete user">Delete</button></div>`}</td></tr>`).join('');
 }
 const activeAdmins=except=>ACCOUNTS.filter(a=>a.role==='admin'&&a.status==='active'&&a.id!==except).length;
 document.addEventListener('click',e=>{const b=e.target.closest('[data-uact]');if(!b)return;const a=ACCOUNTS.find(x=>x.id===+b.dataset.uid);if(!a)return;const act=b.dataset.uact;
+  if(a.primary)return toast('The primary admin keeps every right and cannot be suspended, demoted or deleted.');
+  if(a.role==='admin'&&!isPrimary())return toast('Only the primary admin can change admin accounts.');
   const done=msg=>{saveAccounts();toast(msg);renderUsers();renderDashboard();renderNav()};
   if(act==='approve'){const was=a.status;a.status='active';audit(was==='pending'?'approve':'update','user',a.email,{status:'active'});return done(`${a.name} ${was==='pending'?'approved':'reactivated'}.`)}
   if(act==='suspend'){if(a.role==='admin'&&activeAdmins(a.id)===0)return toast('This is the last active admin. Promote another admin first.');a.status='suspended';audit('update','user',a.email,{status:'suspended'});if(a.id===me()?.id){session=null;store.del('gyt-session');location.hash='home'}return done(`${a.name} suspended.`)}
   if(act==='delete'){if(a.id===me()?.id)return toast('You cannot delete your own account.');if(a.role==='admin'&&activeAdmins(a.id)===0)return toast('This is the last admin.');ACCOUNTS.splice(ACCOUNTS.indexOf(a),1);audit('delete','user',a.email);return done(`${a.email} deleted.`)}
-  if(act==='edit')openForm({title:'Edit '+a.name,fields:[{k:'name',label:'Name',value:a.name,required:true},{k:'role',label:'Role',type:'select',options:[['client','Client'],['admin','Admin']],value:a.role},{k:'inv',label:'Linked investor profile',type:'select',options:[['','None'],...APPLICANTS.filter(x=>!x.deleted).map(x=>[x.id,x.id+' · '+x.name])],value:a.inv||''},{k:'wallet',label:'Wallet address',value:a.wallet||'',mono:true,placeholder:'0x…'}],
-    onSubmit:v=>{if(v.wallet&&!/^0x[0-9a-fA-F]{40}$/.test(v.wallet))return 'Wallet address must be 0x followed by 40 hex characters.';if(a.role==='admin'&&v.role==='client'&&activeAdmins(a.id)===0)return 'This is the last active admin. Promote another admin first.';
-      const ch={};['name','role','wallet'].forEach(k=>{if((a[k]||'')!==v[k])ch[k]=v[k]});if((a.inv||'')!==v.inv)ch.investor=v.inv||null;Object.assign(a,{name:v.name,role:v.role,inv:v.inv||null,wallet:v.wallet||null});audit('update','user',a.email,ch);done('User updated.')}});
+  if(act==='edit')openForm({title:'Edit '+a.name,fields:[{k:'name',label:'Name',value:a.name,required:true},{k:'inv',label:'Linked investor profile',type:'select',options:[['','None'],...APPLICANTS.filter(x=>!x.deleted).map(x=>[x.id,x.id+' · '+x.name])],value:a.inv||''},{k:'wallet',label:'Wallet address',value:a.wallet||'',mono:true,placeholder:'0x…'}],
+    onSubmit:v=>{if(v.wallet&&!/^0x[0-9a-fA-F]{40}$/.test(v.wallet))return 'Wallet address must be 0x followed by 40 hex characters.';
+      const ch={};['name','wallet'].forEach(k=>{if((a[k]||'')!==v[k])ch[k]=v[k]});if((a.inv||'')!==v.inv)ch.investor=v.inv||null;Object.assign(a,{name:v.name,inv:v.inv||null,wallet:v.wallet||null});audit('update','user',a.email,ch);done('User updated.')}});
 });
 $('#usSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;usFilter=b.dataset.f;$('#usSeg').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderUsers()});
+
+
+/* ---------- admin: admins & rights (primary admin only) ---------- */
+function renderAdmins(){if(!$('#admRows'))return;
+  const list=ACCOUNTS.filter(a=>a.role==='admin').sort((x,y)=>(y.primary?1:0)-(x.primary?1:0)||x.id-y.id);
+  $('#admRows').innerHTML=list.map(a=>`<tr><td><b>${esc(a.name)}</b>${a.primary?' <span class="pill ok">Primary</span>':''}<br><span class="small muted">${esc(a.email)}</span></td>
+    <td class="small">${a.primary?'Every right':(a.rights||[]).length?(a.rights||[]).map(rightLabel).join(' · '):'<span class="muted">No rights yet</span>'}</td>
+    <td><span class="pill ${a.status==='active'?'ok':'crit'}">${a.status}</span></td><td class="small">${esc(a.joined||'')}</td>
+    <td>${a.primary?'<span class="small muted">Can&rsquo;t be changed</span>':`<div class="row" style="gap:6px;flex-wrap:nowrap"><button class="sm" data-aact="rights" data-aid="${a.id}">Edit rights</button>${a.status==='active'?`<button class="sm" data-aact="suspend" data-aid="${a.id}">Suspend</button>`:`<button class="sm" data-aact="activate" data-aid="${a.id}">Reactivate</button>`}<button class="sm" data-aact="remove" data-aid="${a.id}" data-confirm="Remove admin access">Remove admin</button></div>`}</td></tr>`).join('')}
+const rightFields=cur=>ADMIN_RIGHTS.map(([k,l])=>({k:'r_'+k,label:l,type:'checkbox',value:(cur||[]).includes(k)}));
+const pickRights=v=>ADMIN_RIGHTS.map(r=>r[0]).filter(k=>v['r_'+k]);
+const tempPw=()=>{const c='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';const a=new Uint32Array(12);crypto.getRandomValues(a);return [...a].map(n=>c[n%c.length]).join('')};
+$('#admAdd').addEventListener('click',()=>{if(!isPrimary())return toast('Only the primary admin can add admins.');
+  openForm({title:'Add an admin',note:'If the email already has an account it becomes an admin; otherwise a new account is made with a temporary password.',submit:'Add admin',
+    fields:[{k:'email',label:'Email',required:true,type:'email'},{k:'name',label:'Full name (for a new account)'},...rightFields([])],
+    onSubmit:async v=>{const email=v.email.toLowerCase();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))return 'Enter a valid email address.';
+      const rights=pickRights(v);let a=ACCOUNTS.find(x=>x.email===email);let pw=null;
+      if(a){if(a.role==='admin')return `${email} is already an admin. Change their rights instead.`;Object.assign(a,{role:'admin',status:'active',rights})}
+      else{if((v.name||'').length<2)return "Give the new admin's full name.";pw=tempPw();a={id:Math.max(...ACCOUNTS.map(x=>x.id))+1,name:v.name,email,pw:await pwHash(email,pw),role:'admin',rights,status:'active',inv:null,wallet:null,joined:new Date().toISOString().slice(0,10)};ACCOUNTS.push(a)}
+      saveAccounts();audit('create','admin',email,{rights,new_account:!!pw});renderAdmins();toast(`${email} is now an admin.`);
+      const n=$('#admNew');n.hidden=!pw;if(pw)n.innerHTML=`<b>Admin account created for ${esc(email)}.</b> Give them this temporary password privately; it is shown only once and they should change it in Settings after signing in:<p class="mono" style="font-size:18px;margin:8px 0">${pw}</p><button class="sm" type="button" onclick="this.parentNode.hidden=true">Done</button>`}})});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-aact]');if(!b)return;if(!isPrimary())return toast('Only the primary admin can manage admins.');
+  const a=ACCOUNTS.find(x=>x.id===+b.dataset.aid);if(!a||a.primary)return toast('The primary admin keeps every right and cannot be suspended, demoted or deleted.');const act=b.dataset.aact;
+  const done=m=>{saveAccounts();renderAdmins();renderNav();toast(m)};
+  if(act==='rights')return openForm({title:'Rights for '+a.name,submit:'Save rights',fields:rightFields(a.rights),onSubmit:v=>{a.rights=pickRights(v);audit('update','admin',a.email,{rights:a.rights});done(`Rights updated for ${a.name}.`)}});
+  if(act==='suspend'){a.status='suspended';audit('update','admin',a.email,{status:'suspended'});return done(`${a.name} suspended.`)}
+  if(act==='activate'){a.status='active';audit('update','admin',a.email,{status:'active'});return done(`${a.name} reactivated.`)}
+  if(act==='remove'){a.role='client';delete a.rights;audit('remove','admin',a.email);return done(`${a.name} is no longer an admin.`)}});
 
 /* ---------- admin: investors & KYC (replaces the old queue) ---------- */
 renderKYC=function(){

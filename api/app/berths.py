@@ -27,7 +27,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .auth import User, require_active, require_admin, require_user
+from .auth import User, require_active, require_right, require_user
 from .config import get_settings
 from .db import get_db
 from .devices import role_for
@@ -262,7 +262,7 @@ def confirm_hold(hold_id: int, body: ConfirmIn, db: Session = Depends(get_db), u
 
 
 @router.get("/admin/berths/board")
-def berth_board(marina_id: str, day: date | None = None, db: Session = Depends(get_db), who=Depends(require_admin)):
+def berth_board(marina_id: str, day: date | None = None, db: Session = Depends(get_db), who=Depends(require_right("berths"))):
     """One marina at a glance: every berth, who is in it or holding it, and anything that needs a look."""
     day = day or date.today()
     expire_holds(db)

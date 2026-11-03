@@ -114,15 +114,68 @@ def require_active(user: User = Depends(require_user)) -> User:
     return user
 
 
-def require_admin(user: User | None = Depends(current_user), x_admin_token: str = Header(default="")) -> User | None:
+# Admin rights. The primary admin has all of them; each secondary admin has the ones the primary chose.
+RIGHTS: dict[str, str] = {
+    "autopilot": "Autopilot (AI)",
+    "monitoring": "Yacht monitoring and tracking",
+    "registry": "Yachts, minting and hashes",
+    "users": "Users and approvals",
+    "investors": "Investors and KYC",
+    "banking": "Banking details",
+    "berths": "Berths, berth plans and marinas",
+    "bookings": "Bookings and escrow",
+    "audit": "Audit log",
+    "docs": "Internal documentation",
+}
+
+
+@dataclass
+class AdminAccess:
+    user: User | None          # None = the trusted service caller (ADMIN_TOKEN)
+    is_primary: bool
+    rights: frozenset
+
+    def has(self, right: str) -> bool:
+        return self.is_primary or right in self.rights
+
+
+def admin_access(user: User | None, x_admin_token: str, db) -> AdminAccess:
+    """Who is calling, checked fresh against the database so a changed right applies at once."""
     service = get_settings().admin_token
     if service and x_admin_token and hmac.compare_digest(x_admin_token, service):
-        return None  # trusted service caller
+        return AdminAccess(None, True, frozenset(RIGHTS))  # trusted service caller
     if user is None:
         raise HTTPException(401, "Sign in as an administrator")
-    if user.role != "admin" or user.status != "active":
+    r = db.execute(text("SELECT role, status, is_primary, admin_rights FROM users WHERE id=:i"), {"i": user.id}).first()
+    if r is None or r.role != "admin" or r.status != "active":
         raise HTTPException(403, "Administrator access required")
-    return user
+    return AdminAccess(user, bool(r.is_primary), frozenset(r.admin_rights or []))
+
+
+def require_admin(user: User | None = Depends(current_user), x_admin_token: str = Header(default=""), db: Session = Depends(get_db)) -> User | None:
+    """Any active admin, whatever their rights."""
+    return admin_access(user, x_admin_token, db).user
+
+
+def require_right(*needed: str):
+    """An admin holding every one of these rights (the primary admin holds them all)."""
+    for n in needed:
+        assert n in RIGHTS, n
+
+    def dep(user: User | None = Depends(current_user), x_admin_token: str = Header(default=""), db: Session = Depends(get_db)) -> User | None:
+        a = admin_access(user, x_admin_token, db)
+        missing = [n for n in needed if not a.has(n)]
+        if missing:
+            raise HTTPException(403, f"You don't have the {' and '.join(RIGHTS[m] for m in missing)} right. Ask the primary admin to add it.")
+        return a.user
+    return dep
+
+
+def require_primary(user: User | None = Depends(current_user), x_admin_token: str = Header(default=""), db: Session = Depends(get_db)) -> User | None:
+    a = admin_access(user, x_admin_token, db)
+    if not a.is_primary:
+        raise HTTPException(403, "Only the primary admin can do this")
+    return a.user
 
 
 # ---------------------------------------------------------------- rate limiting
@@ -232,19 +285,23 @@ def login(body: SignInIn, request: Request, db: Session = Depends(get_db)):
 @router.get("/me")
 def me(user: User = Depends(require_user), db: Session = Depends(get_db)):
     """Fresh from the database, so approvals take effect without signing out."""
-    r = db.execute(text("SELECT id,email,name,role,investor_id,status FROM users WHERE id=:i"), {"i": user.id}).first()
+    r = db.execute(text("SELECT id,email,name,role,investor_id,status,is_primary,admin_rights FROM users WHERE id=:i"), {"i": user.id}).first()
     if r is None:
         raise HTTPException(401, "Account no longer exists")
     fresh = User(r.id, r.email, r.name, r.role, r.investor_id, r.status)
-    return {**fresh.__dict__, "token": issue_token(fresh)}
+    admin = r.role == "admin" and r.status == "active"
+    return {**fresh.__dict__, "token": issue_token(fresh), "is_primary": bool(r.is_primary) and admin,
+            "rights": (list(RIGHTS) if r.is_primary else [x for x in (r.admin_rights or []) if x in RIGHTS]) if admin else []}
 
 
 def ensure_admin(db: Session, email: str, password: str, name: str = "GYT Admin") -> None:
     """Create the first admin if it does not exist. The password is hashed before storage."""
     exists = db.execute(text("SELECT 1 FROM users WHERE email=:e"), {"e": email.lower()}).first()
     if not exists:
+        # the first admin is the primary admin: every right, and it can never be deleted or demoted
         db.execute(
-            text("INSERT INTO users (email,name,password_hash,role,status) VALUES (:e,:n,:h,'admin','active')"),
+            text("""INSERT INTO users (email,name,password_hash,role,status,is_primary)
+                    VALUES (:e,:n,:h,'admin','active', NOT EXISTS (SELECT 1 FROM users WHERE is_primary))"""),
             {"e": email.lower(), "n": name, "h": hash_password(password)},
         )
 

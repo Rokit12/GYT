@@ -14,7 +14,7 @@ from .chain import ChainClient
 from .config import get_settings
 from .db import get_db
 from .events import anchor_pending, proof_for_event, record_event
-from .auth import User, require_active, require_admin, require_user
+from .auth import User, require_active, require_right, require_user
 from .integrations import KycProvider
 from .schemas import (
     AisIn, BerthBookingIn, CreditStayIn, GpsFix, ModeIn, SarIn, TrackerCreate, TransferCheckIn, YachtCreate,
@@ -251,7 +251,7 @@ def search_berths(
     return [dict(r) for r in rows]
 
 
-@router.patch("/berths/{berth_id}", dependencies=[Depends(require_admin)])
+@router.patch("/berths/{berth_id}", dependencies=[Depends(require_right("berths"))])
 def set_berth_status(berth_id: int, status: str = Query(pattern="^(available|reserved|occupied|maintenance)$"), db: Session = Depends(get_db)):
     n = db.execute(text("UPDATE berths SET status=:s WHERE id=:i"), {"s": status, "i": berth_id}).rowcount
     if not n:
@@ -263,7 +263,7 @@ def set_berth_status(berth_id: int, status: str = Query(pattern="^(available|res
 # ------------------------------------------------------------------ tracking
 
 
-@router.post("/trackers", status_code=201, dependencies=[Depends(require_admin)])
+@router.post("/trackers", status_code=201, dependencies=[Depends(require_right("monitoring"))])
 def register_tracker(body: TrackerCreate, db: Session = Depends(get_db)):
     row_or_404(db.execute(text("SELECT 1 FROM yachts WHERE id=:y"), {"y": body.yacht_id}).first(), "Yacht")
     db.execute(
@@ -300,7 +300,7 @@ def ingest_gps(fix: GpsFix, db: Session = Depends(get_db)):
     return {"accepted": True}
 
 
-@router.post("/tracking/ais", status_code=202, dependencies=[Depends(require_admin)])
+@router.post("/tracking/ais", status_code=202, dependencies=[Depends(require_right("monitoring"))])
 def ingest_ais(records: list[AisIn], db: Session = Depends(get_db)):
     ids = dict(db.execute(text("SELECT mmsi, id FROM yachts WHERE mmsi IS NOT NULL")).all())
     n = 0
@@ -312,7 +312,7 @@ def ingest_ais(records: list[AisIn], db: Session = Depends(get_db)):
     return {"accepted": n, "ignored": len(records) - n}
 
 
-@router.post("/tracking/sar", status_code=202, dependencies=[Depends(require_admin)])
+@router.post("/tracking/sar", status_code=202, dependencies=[Depends(require_right("monitoring"))])
 def ingest_sar(d: SarIn, db: Session = Depends(get_db)):
     _insert_position(db, d.yacht_id, "sar", d.lat, d.lon, d.observed_at, True, length=d.est_length_m,
                      raw=f'{{"provider":"{d.provider}"}}')
@@ -356,7 +356,7 @@ def book_berth(body: BerthBookingIn, db: Session = Depends(get_db), user: User =
     return {"ref": body.ref, "amount_usd": amount, "status": "escrowed"}
 
 
-@router.get("/bookings", dependencies=[Depends(require_admin)])
+@router.get("/bookings", dependencies=[Depends(require_right("bookings"))])
 def list_bookings(limit: int = Query(50, le=500), db: Session = Depends(get_db)):
     rows = db.execute(
         text(
@@ -370,12 +370,12 @@ def list_bookings(limit: int = Query(50, le=500), db: Session = Depends(get_db))
     return [dict(r) for r in rows]
 
 
-@router.get("/investors", dependencies=[Depends(require_admin)])
+@router.get("/investors", dependencies=[Depends(require_right("investors"))])
 def list_investors(db: Session = Depends(get_db)):
     return [dict(r) for r in db.execute(text("SELECT * FROM investors ORDER BY id")).mappings()]
 
 
-@router.post("/bookings/{ref}/arrival", dependencies=[Depends(require_admin)])
+@router.post("/bookings/{ref}/arrival", dependencies=[Depends(require_right("bookings"))])
 def prove_arrival(ref: str, db: Session = Depends(get_db)):
     bk = row_or_404(
         db.execute(
@@ -427,7 +427,7 @@ def prove_arrival(ref: str, db: Session = Depends(get_db)):
     return out
 
 
-@router.post("/bookings/{ref}/release", dependencies=[Depends(require_admin)])
+@router.post("/bookings/{ref}/release", dependencies=[Depends(require_right("bookings"))])
 def release(ref: str, db: Session = Depends(get_db)):
     """After the arrival leaf is anchored, the oracle calls ArrivalEscrow.release with this proof."""
     bk = row_or_404(db.execute(text("SELECT * FROM bookings WHERE ref=:r"), {"r": ref}).mappings().first(), "Booking")
@@ -456,7 +456,7 @@ def release(ref: str, db: Session = Depends(get_db)):
 # ------------------------------------------------------------------ proofs
 
 
-@router.post("/anchors", dependencies=[Depends(require_admin)])
+@router.post("/anchors", dependencies=[Depends(require_right("registry"))])
 def anchor_now(db: Session = Depends(get_db)):
     return anchor_pending(db, ChainClient()) or {"anchored": 0}
 
@@ -485,7 +485,7 @@ def get_proof(event_id: int, db: Session = Depends(get_db)):
 # ------------------------------------------------------------------ compliance & investors
 
 
-@router.post("/investors/{investor_id}/screen", dependencies=[Depends(require_admin)])
+@router.post("/investors/{investor_id}/screen", dependencies=[Depends(require_right("investors"))])
 def screen(investor_id: str, db: Session = Depends(get_db)):
     inv = row_or_404(db.execute(text("SELECT * FROM investors WHERE id=:i"), {"i": investor_id}).first(), "Investor")
     r = KycProvider().screen(inv.id, inv.name, inv.country_code)
@@ -494,7 +494,7 @@ def screen(investor_id: str, db: Session = Depends(get_db)):
     return {"investor_id": investor_id, "screening": r.status, "reference": r.reference}
 
 
-@router.post("/investors/{investor_id}/kyc", dependencies=[Depends(require_admin)])
+@router.post("/investors/{investor_id}/kyc", dependencies=[Depends(require_right("investors"))])
 def set_kyc(investor_id: str, status: str = Query(pattern="^(approved|rejected)$"), db: Session = Depends(get_db)):
     inv = row_or_404(db.execute(text("SELECT screening FROM investors WHERE id=:i"), {"i": investor_id}).first(), "Investor")
     if status == "approved" and inv.screening != "clear":

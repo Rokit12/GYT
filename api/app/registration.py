@@ -37,7 +37,7 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from .auth import User, require_admin, require_user
+from .auth import User, require_right, require_user
 from .config import get_settings
 from .db import get_db
 from .devices import role_for
@@ -314,7 +314,7 @@ def revoke_invite(code: str, db: Session = Depends(get_db), user: User = Depends
 
 
 @router.get("/admin/registrations")
-def registrations(status: str = "pending", db: Session = Depends(get_db), who=Depends(require_admin)):
+def registrations(status: str = "pending", db: Session = Depends(get_db), who=Depends(require_right("users"))):
     rows = db.execute(
         text("""SELECT u.id, u.name, u.email, u.status, u.created_at, c.vessel_name, c.flag, c.mmsi, c.imo, c.loa_m,
                        c.registry_number, c.doc_sha256, c.doc_mime, c.screening
@@ -331,7 +331,7 @@ def registrations(status: str = "pending", db: Session = Depends(get_db), who=De
 
 
 @router.get("/admin/registrations/{uid}/document")
-def registration_document(uid: int, db: Session = Depends(get_db), who=Depends(require_admin)):
+def registration_document(uid: int, db: Session = Depends(get_db), who=Depends(require_right("users"))):
     r = db.execute(text("SELECT doc_bytes, doc_mime FROM owner_claims WHERE user_id=:u"), {"u": uid}).first()
     if r is None or r.doc_bytes is None:
         raise HTTPException(404, "No document")
@@ -339,7 +339,7 @@ def registration_document(uid: int, db: Session = Depends(get_db), who=Depends(r
 
 
 @router.post("/admin/registrations/{uid}/screen")
-def rescreen(uid: int, db: Session = Depends(get_db), who=Depends(require_admin)):
+def rescreen(uid: int, db: Session = Depends(get_db), who=Depends(require_right("users"))):
     res = screen_claim(db, uid)
     db.commit()
     if not res:
