@@ -376,6 +376,13 @@ export function createMarina3D(THREE, el, opts = {}) {
     },
     select(code) { state.selected = code; placeMine(); const s = slots.find(r => r.code === code); if (s) { cam.tx += (s.cx - cam.tx) * 0.6; } wake(); },
     dock,
+    /** Where a berth sits on screen (client px), or null: used for guided tours and tests. */
+    screenOf(code) {
+      const s = slots.find(r => r.code === code); if (!s) return null;
+      const v = new THREE.Vector3(); s.mesh.getWorldPosition(v); v.project(camera);
+      const r = canvas.getBoundingClientRect();
+      return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height };
+    },
     resetView() { frameAll(); cam.auto = !reduce; wake(); },
     dispose() {
       cancelAnimationFrame(raf); if (ro) ro.disconnect(); if (io) io.disconnect();
