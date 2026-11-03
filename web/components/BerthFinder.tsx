@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import type { Berth3D } from "@/lib/marina3d";
 
 const Marina3DView = dynamic(() => import("@/components/Marina3DView"), { ssr: false, loading: () => <p className="small muted">Loading the 3D marina…</p> });
+import { useMarinaPlan, withPlan } from "@/components/useMarinaPlan";
 
 /*
   Find a berth for your yacht. The pontoon drawing shows every berth at the marina to scale, with your
@@ -130,7 +131,8 @@ export default function BerthFinder() {
     load();
   }
 
-  // the same berths for the 3D view
+  // the same berths for the 3D view, laid out from the marina's berth plan when it has one
+  const plan = useMarinaPlan(q.marina);
   const scene3d = useMemo(() => {
     if (!data) return null;
     const heldLoa = (b: Berth) => Number((b.held_by ?? "").match(/([\d.]+) m/)?.[1] ?? b.max_loa_m * 0.8);
@@ -140,8 +142,8 @@ export default function BerthFinder() {
         : b.state === "booked_by_you" && b.id !== sel ? { loa: data.yacht.loa_m, beam: data.yacht.beam_m, name: data.yacht.name } : null,
       held: b.state === "held" ? { loa: heldLoa(b) } : null,
     }));
-    return { berths, yacht: { name: data.yacht.name, loa: data.yacht.loa_m, beam: data.yacht.beam_m }, selected: chosen?.code ?? null };
-  }, [data, chosen]);
+    return withPlan({ berths, yacht: { name: data.yacht.name, loa: data.yacht.loa_m, beam: data.yacht.beam_m }, selected: chosen?.code ?? null }, plan);
+  }, [data, chosen, plan]);
 
   // pontoon drawing, to scale
   const drawing = useMemo(() => {

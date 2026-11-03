@@ -236,6 +236,29 @@ chosen yacht, with the yacht's outline in the selected berth.
 API: `GET /berths/availability`, `POST /berths/{id}/hold`, `DELETE /berths/holds/{id}`,
 `POST /berths/holds/{id}/confirm`, `GET /admin/berths/board`.
 
+### 3D marina and berth plans
+
+Find a berth and the admin berth board both have a **3D marina** view (three.js, `web/lib/marina3d.js`):
+berths and yachts to scale, your yacht in teal where it fits and red where it doesn't, live holds in
+amber, misfits over a red band, and a docking animation on confirm. It works with touch on phones.
+
+**Berth plan to 3D** (`/admin/berths/plan`) turns an image of a marina's berth plan into berths:
+
+1. Load the plan (PNG, JPEG or WebP; a drawing, scan or CAD screenshot). A sample is included.
+2. Set the scale: the plan's width in metres, or *Measure the scale* and click both ends of its scale bar.
+3. *Find berths* runs in the browser (`web/lib/berthplan.js`): every closed, berth-shaped outline at any
+   angle becomes a berth, sized from the scale, with its pontoon end on the side that touches the pontoon.
+   *Read with AI* (only when `ANTHROPIC_API_KEY` is set) also reads printed codes and sizes. Fix codes and
+   sizes in the table, flip or delete a berth, or drag on the plan to draw one.
+4. The 3D marina is built live from the plan, with the image on the water.
+5. *Save* stores the image and adds or updates berths by code with their size and plan position. It never
+   deletes a berth. Find a berth and the board then use the marina's real layout.
+
+API: `GET /marinas/{id}/plan`, `GET /marinas/{id}/plan/image`, `PUT /admin/marinas/{id}/plan/image`,
+`PUT /admin/marinas/{id}/plan`, `POST /admin/marinas/{id}/plan/read` (AI, advisory). After editing
+`web/lib/marina3d.js` or `web/lib/berthplan.js`, run `python3 scripts/sync_pages_3d.py` to update the
+GitHub Pages demo.
+
 ## Autopilot (automation, with optional AI)
 
 `api/app/autopilot.py` runs every `AUTOPILOT_INTERVAL_SECONDS` (and on **Run now** in `/admin/autopilot`):

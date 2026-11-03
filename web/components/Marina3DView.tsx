@@ -33,7 +33,7 @@ export default function Marina3DView({ state, onPick, dockCode, height = "min(60
     return () => { dead = true; m.current?.dispose(); m.current = null; };
   }, []);
 
-  const key = JSON.stringify([state.berths?.map((b: Berth3D) => [b.code, b.state, b.best, b.moored?.loa, b.held?.loa]), state.yacht, state.selected]);
+  const key = JSON.stringify([state.berths?.map((b: Berth3D) => [b.code, b.state, b.best, b.moored?.loa, b.held?.loa, b.at]), state.yacht, state.selected, state.plan]);
   useEffect(() => { if (ready) m.current?.set(state); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [key, ready]);
   useEffect(() => { if (ready && dockCode) m.current?.dock(dockCode); }, [dockCode, ready]);
 

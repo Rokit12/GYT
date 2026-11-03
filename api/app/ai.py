@@ -115,3 +115,78 @@ def write_brief(findings: list[dict]) -> dict:
     if not isinstance(out, dict) or "headline" not in out:
         return {"available": False}
     return {"available": True, "headline": str(out["headline"])[:300], "actions": [str(a)[:200] for a in out.get("actions", [])][:5]}
+
+
+PLAN_TOOL = {
+    "name": "report_berth_plan",
+    "description": "Report every berth drawn on a marina berth plan, with positions as fractions of the image size.",
+    "input_schema": {"type": "object", "properties": {
+        "is_berth_plan": {"type": "boolean", "description": "Is this a plan, drawing or aerial view of marina berths?"},
+        "width_m": {"type": "number", "description": "The real width the whole image covers, in metres, if a scale bar or printed sizes let you work it out"},
+        "berths": {"type": "array", "maxItems": 400, "items": {"type": "object", "properties": {
+            "code": {"type": "string", "description": "The berth's code as printed on the plan, if any"},
+            "end_x": {"type": "number", "description": "x of the centre of the berth's pontoon (quay) end, 0 = left edge, 1 = right edge"},
+            "end_y": {"type": "number", "description": "y of the centre of the pontoon end, 0 = top edge, 1 = bottom edge"},
+            "tip_x": {"type": "number", "description": "x of the centre of the berth's open (seaward) end"},
+            "tip_y": {"type": "number", "description": "y of the centre of the open end"},
+            "width_frac": {"type": "number", "description": "The berth's width as a fraction of the image width"},
+            "length_m": {"type": "number", "description": "Maximum length printed on the plan for this berth, if any"},
+            "beam_m": {"type": "number", "description": "Maximum beam printed for this berth, if any"},
+            "depth_m": {"type": "number", "description": "Depth printed for this berth, if any"},
+        }, "required": ["end_x", "end_y", "tip_x", "tip_y", "width_frac"]}},
+    }, "required": ["is_berth_plan", "berths"]},
+}
+
+
+def _frac(v) -> float | None:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if 0 <= f <= 1 else None
+
+
+def read_berth_plan(data: bytes, mime: str) -> dict:
+    """Read a berth plan image. The admin reviews the result in the importer before anything is saved."""
+    if not enabled():
+        return {"available": False}
+    src = {"type": "base64", "media_type": mime, "data": base64.standard_b64encode(data).decode()}
+    try:
+        out = _call(
+            "You read marina berth plans for a berth booking service. Find every individual berth (a slip or "
+            "mooring space for one yacht, usually between finger piers or drawn as a rectangle) and report it with "
+            "the report_berth_plan tool. Give positions as fractions of the image width and height. The pontoon end "
+            "is the end at the pontoon or quay; the tip is the open, seaward end. Copy berth codes and sizes exactly "
+            "as printed; never invent a code or size you cannot read.",
+            [{"type": "image", "source": src}, {"type": "text", "text": "Report every berth on this plan."}],
+            PLAN_TOOL, max_tokens=8000,
+        )
+    except Exception as e:
+        log.warning("AI plan read failed: %s", e)
+        return {"available": False, "error": str(e)[:200]}
+    if not isinstance(out, dict) or not isinstance(out.get("berths"), list):
+        return {"available": False, "error": "unexpected AI output"}
+    if not out.get("is_berth_plan"):
+        return {"available": True, "berths": [], "note": "This image does not look like a berth plan"}
+    berths = []
+    for b in out["berths"][:400]:
+        if not isinstance(b, dict):
+            continue
+        pts = [_frac(b.get(k)) for k in ("end_x", "end_y", "tip_x", "tip_y", "width_frac")]
+        if any(p is None for p in pts) or pts[4] <= 0:
+            continue
+        item = dict(zip(("end_x", "end_y", "tip_x", "tip_y", "width_frac"), pts))
+        code = str(b.get("code") or "").strip().upper()[:20]
+        if code:
+            item["code"] = code
+        for k, hi in (("length_m", 200), ("beam_m", 60), ("depth_m", 40)):
+            try:
+                v = float(b.get(k))
+                if 0 < v <= hi:
+                    item[k] = v
+            except (TypeError, ValueError):
+                pass
+        berths.append(item)
+    w = out.get("width_m")
+    width = float(w) if isinstance(w, (int, float)) and 5 < w < 5000 else None
+    return {"available": True, "width_m": width, "berths": berths}

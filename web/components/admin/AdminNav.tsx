@@ -7,7 +7,7 @@ const GROUPS: [string, [string, string][]][] = [
   ["Overview", [["/admin", "Dashboard"], ["/admin/autopilot", "Autopilot (AI)"], ["/admin/monitoring", "Yacht monitoring"]]],
   ["Registry", [["/admin/yachts", "Yachts & minting"], ["/admin/hashes", "Hashes & addresses"]]],
   ["People & money", [["/admin/users", "Users & approvals"], ["/admin/investors", "Investors & KYC"], ["/admin/banking", "Banking details"]]],
-  ["Operations", [["/admin/berths", "Berth board"], ["/admin/operations", "Bookings & escrow"], ["/admin/marinas", "Marinas & berths"]]],
+  ["Operations", [["/admin/berths", "Berth board"], ["/admin/berths/plan", "Berth plan to 3D"], ["/admin/operations", "Bookings & escrow"], ["/admin/marinas", "Marinas & berths"]]],
   ["Records", [["/admin/audit", "Audit log"], ["/admin/docs", "Documentation"]]],
 ];
 
@@ -19,7 +19,7 @@ export default function AdminNav() {
         <div key={g}>
           <div className="eyebrow">{g}</div>
           {items.map(([href, label]) => (
-            <Link key={href} href={href} aria-current={(href === "/admin" ? path === href : path.startsWith(href)) ? "page" : undefined}>
+            <Link key={href} href={href} aria-current={(href === "/admin" || href === "/admin/berths" ? path === href : path.startsWith(href)) ? "page" : undefined}>
               {label}
             </Link>
           ))}
