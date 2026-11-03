@@ -2444,7 +2444,7 @@ $('#pitchSlides').innerHTML=PITCH.map(p=>`<div class="slide"><div class="k">${p[
 const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(_){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(_){}},del(k){try{localStorage.removeItem(k)}catch(_){}}};
 const pwHash=(email,pw)=>sha('gyt-demo|'+email.toLowerCase()+'|'+pw);
 const SEED_ACCOUNTS=[
- {id:1,name:'GYT Admin',email:'admin@gyt.com',pw:'a68490a5b0e1755418e81e3ffaf3b409a27e90391f4c943a011bc19e26661bef',role:'admin',status:'active',inv:null,wallet:null,joined:'2026-10-01'},
+ {id:1,name:'GYT Admin',email:'admin@gyt.com',pw:'e76102c4a08d3afc144b8d223f366dfa41ead5e239caf09191697c4b446f47e9',role:'admin',status:'active',inv:null,wallet:null,joined:'2026-10-01'},
  {id:2,name:'Jonas Berg',email:'jonas@example.com',pw:null,role:'client',status:'active',inv:'INV-1043',wallet:'0x9be0d1c4a77e2f35b1a8c6d0e94f3a2b7c1d44f0',joined:'2026-10-12'},
  {id:3,name:'Amina Said',email:'amina@example.com',pw:null,role:'client',status:'pending',inv:null,wallet:null,joined:'2026-10-27'},
  {id:4,name:'Kofi Mensah',email:'kofi@example.com',pw:null,role:'client',status:'pending',inv:null,wallet:null,joined:'2026-10-28'},
