@@ -24,7 +24,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from . import ai
-from .auth import require_admin
+from .auth import require_right
 from .berths import expire_holds, fit
 from .config import get_settings
 from .db import get_db
@@ -150,7 +150,7 @@ def run(db: Session) -> dict:
 
 
 @router.get("/admin/autopilot")
-def overview(limit: int = Query(80, le=500), db: Session = Depends(get_db), who=Depends(require_admin)):
+def overview(limit: int = Query(80, le=500), db: Session = Depends(get_db), who=Depends(require_right("autopilot"))):
     rows = db.execute(text("SELECT * FROM autopilot_log ORDER BY at DESC, id DESC LIMIT :n"), {"n": limit}).mappings().all()
     counts = db.execute(text(
         """SELECT count(*) FILTER (WHERE outcome='flagged' AND NOT resolved) AS open_flags,
@@ -165,12 +165,12 @@ def overview(limit: int = Query(80, le=500), db: Session = Depends(get_db), who=
 
 
 @router.post("/admin/autopilot/run")
-def run_now(db: Session = Depends(get_db), who=Depends(require_admin)):
+def run_now(db: Session = Depends(get_db), who=Depends(require_right("autopilot"))):
     return run(db)
 
 
 @router.post("/admin/autopilot/{log_id}/resolve")
-def resolve(log_id: int, db: Session = Depends(get_db), who=Depends(require_admin)):
+def resolve(log_id: int, db: Session = Depends(get_db), who=Depends(require_right("autopilot"))):
     n = db.execute(text("UPDATE autopilot_log SET resolved=TRUE WHERE id=:i"), {"i": log_id}).rowcount
     db.commit()
     if not n:
@@ -179,7 +179,7 @@ def resolve(log_id: int, db: Session = Depends(get_db), who=Depends(require_admi
 
 
 @router.post("/admin/autopilot/approve-recommended")
-def approve_recommended(db: Session = Depends(get_db), who=Depends(require_admin)):
+def approve_recommended(db: Session = Depends(get_db), who=Depends(require_right("autopilot", "users"))):
     """One click for the admin: approve every pending owner whose checks all passed."""
     ids = [r.user_id for r in db.execute(text(
         """SELECT c.user_id FROM owner_claims c JOIN users u ON u.id=c.user_id

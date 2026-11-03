@@ -19,7 +19,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import policy, proof
-from .auth import User, require_admin
+from .auth import User, require_admin, require_primary, require_right
 from .chain import ChainClient
 from .config import get_settings
 from .db import get_db
@@ -63,7 +63,7 @@ def overview(db: Session = Depends(get_db), who=Depends(require_admin)):
 
 
 @router.get("/monitoring")
-def monitoring(db: Session = Depends(get_db), who=Depends(require_admin)):
+def monitoring(db: Session = Depends(get_db), who=Depends(require_right("monitoring"))):
     """Latest fix per source for every yacht, how old it is, and what needs attention."""
     data = rows(
         db,
@@ -106,7 +106,7 @@ def monitoring(db: Session = Depends(get_db), who=Depends(require_admin)):
 
 
 @router.get("/audit")
-def audit_log(limit: int = Query(100, le=1000), db: Session = Depends(get_db), who=Depends(require_admin)):
+def audit_log(limit: int = Query(100, le=1000), db: Session = Depends(get_db), who=Depends(require_right("audit"))):
     return rows(db, "SELECT * FROM audit_log ORDER BY id DESC LIMIT :n", n=limit)
 
 
@@ -122,10 +122,10 @@ class UserPatch(BaseModel):
 
 
 @router.get("/users")
-def users(status: str | None = None, db: Session = Depends(get_db), who=Depends(require_admin)):
+def users(status: str | None = None, db: Session = Depends(get_db), who=Depends(require_right("users"))):
     return rows(
         db,
-        """SELECT id,email,name,role,status,investor_id,wallet_address,created_at,last_login_at FROM users
+        """SELECT id,email,name,role,status,investor_id,wallet_address,created_at,last_login_at,is_primary,admin_rights FROM users
            WHERE (CAST(:s AS text) IS NULL OR status=:s) ORDER BY (status='pending') DESC, id""",
         s=status,
     )
@@ -137,12 +137,34 @@ def _admins_left(db, excluding: int) -> int:
     ).scalar()
 
 
+def _caller_is_primary(db, who) -> bool:
+    if who is None:
+        return True   # trusted service caller
+    return bool(db.execute(text("SELECT is_primary FROM users WHERE id=:i"), {"i": who.id}).scalar())
+
+
+def _guard_admin_account(db, who, cur, changes: dict | None = None):
+    """The primary admin can't be changed here at all; other admin accounts, and making someone an admin,
+    are for the primary admin only (Admins & rights)."""
+    if cur["is_primary"]:
+        raise HTTPException(409, "The primary admin keeps every right and cannot be suspended, demoted or deleted")
+    touches_admin = cur["role"] == "admin" or (changes or {}).get("role") == "admin"
+    if touches_admin and not _caller_is_primary(db, who):
+        raise HTTPException(403, "Only the primary admin can change admin accounts")
+
+
 @router.patch("/users/{user_id}")
-def update_user(user_id: int, body: UserPatch, db: Session = Depends(get_db), who=Depends(require_admin)):
+def update_user(user_id: int, body: UserPatch, db: Session = Depends(get_db), who=Depends(require_right("users"))):
     cur = db.execute(text("SELECT * FROM users WHERE id=:i"), {"i": user_id}).mappings().first()
     if cur is None:
         raise HTTPException(404, "User not found")
     changes = body.model_dump(exclude_unset=True)
+    _guard_admin_account(db, who, cur, changes)
+    new_rights = "keep"
+    if changes.get("role") == "admin" and cur["role"] != "admin":
+        new_rights = []      # a new secondary admin starts with no rights; the primary adds them
+    if changes.get("role") == "client" and cur["role"] == "admin":
+        new_rights = None
     demoting = changes.get("role") == "client" or changes.get("status") in ("suspended", "pending")
     if cur["role"] == "admin" and demoting and _admins_left(db, user_id) == 0:
         raise HTTPException(409, "This is the last active admin. Promote another admin first.")
@@ -153,6 +175,8 @@ def update_user(user_id: int, body: UserPatch, db: Session = Depends(get_db), wh
         return dict(cur)
     sets = ", ".join(f"{k}=:{k}" for k in changes)
     db.execute(text(f"UPDATE users SET {sets} WHERE id=:id"), {**changes, "id": user_id})
+    if new_rights != "keep":
+        db.execute(text("UPDATE users SET admin_rights=CAST(:r AS text[]) WHERE id=:id"), {"r": new_rights, "id": user_id})
     action = "approve" if changes.get("status") == "active" and cur["status"] == "pending" else "update"
     audit(db, who, action, "user", user_id, changes)
     db.commit()
@@ -160,16 +184,17 @@ def update_user(user_id: int, body: UserPatch, db: Session = Depends(get_db), wh
 
 
 @router.delete("/users/{user_id}", status_code=204)
-def delete_user(user_id: int, db: Session = Depends(get_db), who=Depends(require_admin)):
-    cur = db.execute(text("SELECT role,email FROM users WHERE id=:i"), {"i": user_id}).first()
+def delete_user(user_id: int, db: Session = Depends(get_db), who=Depends(require_right("users"))):
+    cur = db.execute(text("SELECT role,email,is_primary FROM users WHERE id=:i"), {"i": user_id}).mappings().first()
     if cur is None:
         raise HTTPException(404, "User not found")
     if who and who.id == user_id:
         raise HTTPException(409, "You cannot delete your own account")
-    if cur.role == "admin" and _admins_left(db, user_id) == 0:
+    _guard_admin_account(db, who, cur)
+    if cur["role"] == "admin" and _admins_left(db, user_id) == 0:
         raise HTTPException(409, "This is the last admin")
     db.execute(text("DELETE FROM users WHERE id=:i"), {"i": user_id})
-    audit(db, who, "delete", "user", user_id, {"email": cur.email})
+    audit(db, who, "delete", "user", user_id, {"email": cur["email"]})
     db.commit()
 
 
@@ -223,12 +248,12 @@ def _clean_number(n: str) -> str:
 
 
 @router.get("/bank-accounts")
-def bank_accounts(db: Session = Depends(get_db), who=Depends(require_admin)):
+def bank_accounts(db: Session = Depends(get_db), who=Depends(require_right("banking"))):
     return rows(db, f"SELECT {BANK_COLS} FROM bank_accounts ORDER BY id DESC")
 
 
 @router.post("/bank-accounts", status_code=201)
-def add_bank(body: BankIn, db: Session = Depends(get_db), who=Depends(require_admin)):
+def add_bank(body: BankIn, db: Session = Depends(get_db), who=Depends(require_right("banking"))):
     num = _clean_number(body.account_number)
     bid = db.execute(
         text(
@@ -244,7 +269,7 @@ def add_bank(body: BankIn, db: Session = Depends(get_db), who=Depends(require_ad
 
 
 @router.patch("/bank-accounts/{bank_id}")
-def update_bank(bank_id: int, body: BankPatch, db: Session = Depends(get_db), who=Depends(require_admin)):
+def update_bank(bank_id: int, body: BankPatch, db: Session = Depends(get_db), who=Depends(require_right("banking"))):
     if not db.execute(text("SELECT 1 FROM bank_accounts WHERE id=:i"), {"i": bank_id}).first():
         raise HTTPException(404, "Bank account not found")
     ch = body.model_dump(exclude_unset=True)
@@ -262,7 +287,7 @@ def update_bank(bank_id: int, body: BankPatch, db: Session = Depends(get_db), wh
 
 
 @router.delete("/bank-accounts/{bank_id}", status_code=204)
-def delete_bank(bank_id: int, db: Session = Depends(get_db), who=Depends(require_admin)):
+def delete_bank(bank_id: int, db: Session = Depends(get_db), who=Depends(require_right("banking"))):
     r = db.execute(text("DELETE FROM bank_accounts WHERE id=:i RETURNING last4"), {"i": bank_id}).first()
     if r is None:
         raise HTTPException(404, "Bank account not found")
@@ -289,7 +314,7 @@ class YachtPatch(BaseModel):
 
 
 @router.get("/yachts")
-def admin_yachts(db: Session = Depends(get_db), who=Depends(require_admin)):
+def admin_yachts(db: Session = Depends(get_db), who=Depends(require_right("registry"))):
     return rows(
         db,
         """SELECT y.*, m.name AS marina_name,
@@ -299,7 +324,7 @@ def admin_yachts(db: Session = Depends(get_db), who=Depends(require_admin)):
 
 
 @router.patch("/yachts/{yacht_id}")
-def update_yacht(yacht_id: str, body: YachtPatch, db: Session = Depends(get_db), who=Depends(require_admin)):
+def update_yacht(yacht_id: str, body: YachtPatch, db: Session = Depends(get_db), who=Depends(require_right("registry"))):
     ch = body.model_dump(exclude_unset=True)
     if not ch:
         raise HTTPException(422, "Nothing to update")
@@ -319,7 +344,7 @@ def update_yacht(yacht_id: str, body: YachtPatch, db: Session = Depends(get_db),
 
 
 @router.delete("/yachts/{yacht_id}", status_code=204)
-def retire_yacht(yacht_id: str, db: Session = Depends(get_db), who=Depends(require_admin)):
+def retire_yacht(yacht_id: str, db: Session = Depends(get_db), who=Depends(require_right("registry"))):
     """Soft delete: the yacht leaves listings but its history and proofs stay verifiable."""
     if db.execute(text("SELECT 1 FROM bookings WHERE yacht_id=:i AND status IN ('escrowed','arrived')"), {"i": yacht_id}).first():
         raise HTTPException(409, "This yacht has money in escrow. Settle or refund those bookings first.")
@@ -334,7 +359,7 @@ def retire_yacht(yacht_id: str, db: Session = Depends(get_db), who=Depends(requi
 
 
 @router.post("/yachts/{yacht_id}/verify")
-def verify_yacht(yacht_id: str, db: Session = Depends(get_db), who=Depends(require_admin)):
+def verify_yacht(yacht_id: str, db: Session = Depends(get_db), who=Depends(require_right("registry"))):
     y = db.execute(text("SELECT twin_status FROM yachts WHERE id=:i"), {"i": yacht_id}).first()
     if y is None:
         raise HTTPException(404, "Yacht not found")
@@ -348,7 +373,7 @@ def verify_yacht(yacht_id: str, db: Session = Depends(get_db), who=Depends(requi
 
 
 @router.post("/yachts/{yacht_id}/mint-twin")
-def mint_twin(yacht_id: str, db: Session = Depends(get_db), who=Depends(require_admin)):
+def mint_twin(yacht_id: str, db: Session = Depends(get_db), who=Depends(require_right("registry"))):
     y = db.execute(
         text("SELECT id, twin_status, flag, registry_ref, mmsi, docs_root FROM yachts WHERE id=:i"), {"i": yacht_id}
     ).first()
@@ -384,13 +409,13 @@ class ComplianceIn(BaseModel):
 
 
 @router.get("/yachts/{yacht_id}/compliance")
-def get_compliance(yacht_id: str, db: Session = Depends(get_db), who=Depends(require_admin)):
+def get_compliance(yacht_id: str, db: Session = Depends(get_db), who=Depends(require_right("registry"))):
     r = rows(db, "SELECT * FROM compliance_config WHERE yacht_id=:i", i=yacht_id)
     return r[0] if r else {"yacht_id": yacht_id, "allowed_countries": [], "professional_max_bps": 2500, "retail_max_bps": 200, "lockup_until": None}
 
 
 @router.put("/yachts/{yacht_id}/compliance")
-def set_compliance(yacht_id: str, body: ComplianceIn, db: Session = Depends(get_db), who=Depends(require_admin)):
+def set_compliance(yacht_id: str, body: ComplianceIn, db: Session = Depends(get_db), who=Depends(require_right("registry"))):
     if body.retail_max_bps > body.professional_max_bps:
         raise HTTPException(422, "Retail cap cannot exceed the professional cap")
     if not db.execute(text("SELECT 1 FROM yachts WHERE id=:i"), {"i": yacht_id}).first():
@@ -413,7 +438,7 @@ class MintUnitsIn(BaseModel):
 
 
 @router.post("/yachts/{yacht_id}/mint-units")
-def mint_units(yacht_id: str, body: MintUnitsIn, db: Session = Depends(get_db), who=Depends(require_admin)):
+def mint_units(yacht_id: str, body: MintUnitsIn, db: Session = Depends(get_db), who=Depends(require_right("registry"))):
     y = db.execute(
         text("SELECT twin_status, units_total, units_minted, units_contract FROM yachts WHERE id=:i"), {"i": yacht_id}
     ).first()
@@ -475,7 +500,7 @@ class MarinaPatch(BaseModel):
 
 
 @router.post("/marinas", status_code=201)
-def add_marina(b: MarinaIn, db: Session = Depends(get_db), who=Depends(require_admin)):
+def add_marina(b: MarinaIn, db: Session = Depends(get_db), who=Depends(require_right("berths"))):
     try:
         db.execute(text("INSERT INTO marinas (id,name,region,location,arrival_radius_m) VALUES (:i,:n,:r,ST_MakePoint(:lon,:lat)::geography,:rad)"),
                    dict(i=b.id, n=b.name, r=b.region, lat=b.lat, lon=b.lon, rad=b.arrival_radius_m))
@@ -488,7 +513,7 @@ def add_marina(b: MarinaIn, db: Session = Depends(get_db), who=Depends(require_a
 
 
 @router.patch("/marinas/{marina_id}")
-def update_marina(marina_id: str, b: MarinaPatch, db: Session = Depends(get_db), who=Depends(require_admin)):
+def update_marina(marina_id: str, b: MarinaPatch, db: Session = Depends(get_db), who=Depends(require_right("berths"))):
     ch = b.model_dump(exclude_unset=True)
     cur = db.execute(text("SELECT ST_Y(location::geometry) lat, ST_X(location::geometry) lon FROM marinas WHERE id=:i"), {"i": marina_id}).first()
     if cur is None:
@@ -502,7 +527,7 @@ def update_marina(marina_id: str, b: MarinaPatch, db: Session = Depends(get_db),
 
 
 @router.delete("/marinas/{marina_id}", status_code=204)
-def delete_marina(marina_id: str, db: Session = Depends(get_db), who=Depends(require_admin)):
+def delete_marina(marina_id: str, db: Session = Depends(get_db), who=Depends(require_right("berths"))):
     if db.execute(text("SELECT 1 FROM yachts WHERE home_marina_id=:i UNION SELECT 1 FROM bookings WHERE marina_id=:i"), {"i": marina_id}).first():
         raise HTTPException(409, "Yachts or bookings still reference this marina")
     db.execute(text("DELETE FROM berths WHERE marina_id=:i"), {"i": marina_id})
@@ -530,7 +555,7 @@ class BerthPatch(BaseModel):
 
 
 @router.post("/berths", status_code=201)
-def add_berth(b: BerthIn, db: Session = Depends(get_db), who=Depends(require_admin)):
+def add_berth(b: BerthIn, db: Session = Depends(get_db), who=Depends(require_right("berths"))):
     try:
         bid = db.execute(text("""INSERT INTO berths (marina_id,code,max_loa_m,max_beam_m,rate_usd_day,services)
                                  VALUES (:m,:c,:l,:b,:r,:s) RETURNING id"""),
@@ -544,7 +569,7 @@ def add_berth(b: BerthIn, db: Session = Depends(get_db), who=Depends(require_adm
 
 
 @router.patch("/berths/{berth_id}")
-def update_berth(berth_id: int, b: BerthPatch, db: Session = Depends(get_db), who=Depends(require_admin)):
+def update_berth(berth_id: int, b: BerthPatch, db: Session = Depends(get_db), who=Depends(require_right("berths"))):
     ch = b.model_dump(exclude_unset=True)
     if not ch:
         raise HTTPException(422, "Nothing to update")
@@ -557,7 +582,7 @@ def update_berth(berth_id: int, b: BerthPatch, db: Session = Depends(get_db), wh
 
 
 @router.delete("/berths/{berth_id}", status_code=204)
-def delete_berth(berth_id: int, db: Session = Depends(get_db), who=Depends(require_admin)):
+def delete_berth(berth_id: int, db: Session = Depends(get_db), who=Depends(require_right("berths"))):
     if db.execute(text("SELECT 1 FROM bookings WHERE berth_id=:i"), {"i": berth_id}).first():
         raise HTTPException(409, "This berth has bookings. Set it to maintenance instead.")
     if not db.execute(text("DELETE FROM berths WHERE id=:i"), {"i": berth_id}).rowcount:
@@ -567,7 +592,7 @@ def delete_berth(berth_id: int, db: Session = Depends(get_db), who=Depends(requi
 
 
 @router.post("/bookings/{ref}/cancel")
-def cancel_booking(ref: str, db: Session = Depends(get_db), who=Depends(require_admin)):
+def cancel_booking(ref: str, db: Session = Depends(get_db), who=Depends(require_right("bookings"))):
     b = db.execute(text("SELECT status, kind FROM bookings WHERE ref=:r"), {"r": ref}).first()
     if b is None:
         raise HTTPException(404, "Booking not found")
@@ -597,7 +622,7 @@ class InvestorPatch(BaseModel):
 
 
 @router.post("/investors", status_code=201)
-def add_investor(b: InvestorIn, db: Session = Depends(get_db), who=Depends(require_admin)):
+def add_investor(b: InvestorIn, db: Session = Depends(get_db), who=Depends(require_right("investors"))):
     try:
         db.execute(text("INSERT INTO investors (id,name,kind,country_code,professional,wallet) VALUES (:id,:name,:kind,:country_code,:professional,:wallet)"),
                    b.model_dump())
@@ -610,7 +635,7 @@ def add_investor(b: InvestorIn, db: Session = Depends(get_db), who=Depends(requi
 
 
 @router.patch("/investors/{investor_id}")
-def update_investor(investor_id: str, b: InvestorPatch, db: Session = Depends(get_db), who=Depends(require_admin)):
+def update_investor(investor_id: str, b: InvestorPatch, db: Session = Depends(get_db), who=Depends(require_right("investors"))):
     ch = b.model_dump(exclude_unset=True)
     if not ch:
         raise HTTPException(422, "Nothing to update")
@@ -623,7 +648,7 @@ def update_investor(investor_id: str, b: InvestorPatch, db: Session = Depends(ge
 
 
 @router.delete("/investors/{investor_id}", status_code=204)
-def delete_investor(investor_id: str, db: Session = Depends(get_db), who=Depends(require_admin)):
+def delete_investor(investor_id: str, db: Session = Depends(get_db), who=Depends(require_right("investors"))):
     if db.execute(text("SELECT 1 FROM holdings WHERE investor_id=:i AND units>0"), {"i": investor_id}).first():
         raise HTTPException(409, "This investor still holds units. Transfer or redeem them first.")
     if not db.execute(text("UPDATE investors SET deleted_at=now() WHERE id=:i AND deleted_at IS NULL"), {"i": investor_id}).rowcount:
@@ -636,7 +661,7 @@ def delete_investor(investor_id: str, db: Session = Depends(get_db), who=Depends
 
 
 @router.get("/hashes")
-def hashes(db: Session = Depends(get_db), who=Depends(require_admin)):
+def hashes(db: Session = Depends(get_db), who=Depends(require_right("registry"))):
     s = get_settings()
     return {
         "contracts": {

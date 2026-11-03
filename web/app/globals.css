@@ -1004,3 +1004,11 @@ pre, code { overflow-wrap: anywhere; }
 .row > * { min-width: 0; max-width: 100%; }
 input, select, textarea { max-width: 100%; }
 main, .admin-main { grid-template-columns: minmax(0, 1fr); }
+
+/* v9: admin rights */
+.rights-pick { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 6px; margin: 0; min-width: 0; }
+.rights-pick legend { padding: 0 4px; }
+.rights-pick .check { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--ink); }
+.rights-pick .check input { width: auto; }
+.admin-role { margin: 14px 0 0; padding-top: 10px; border-top: 1px solid var(--line); }
+@media (max-width: 860px) { .admin-role { display: none; } }

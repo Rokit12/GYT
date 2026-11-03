@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from . import ai
 from .admin import audit
-from .auth import User, require_admin
+from .auth import User, require_right
 from .db import get_db
 from .photos import sniff
 
@@ -72,7 +72,7 @@ def plan_image(marina_id: str, db: Session = Depends(get_db)):
 
 
 @router.put("/admin/marinas/{marina_id}/plan/image")
-async def put_plan_image(marina_id: str, request: Request, db: Session = Depends(get_db), who: User | None = Depends(require_admin)):
+async def put_plan_image(marina_id: str, request: Request, db: Session = Depends(get_db), who: User | None = Depends(require_right("berths"))):
     """Store the plan image. Its real size is set when the berths are saved (PUT /admin/marinas/{id}/plan)."""
     _marina(db, marina_id)
     data = await request.body()
@@ -113,7 +113,7 @@ class PlanIn(BaseModel):
 
 
 @router.put("/admin/marinas/{marina_id}/plan")
-def save_plan(marina_id: str, b: PlanIn, db: Session = Depends(get_db), who: User | None = Depends(require_admin)):
+def save_plan(marina_id: str, b: PlanIn, db: Session = Depends(get_db), who: User | None = Depends(require_right("berths"))):
     """Save the plan's size and its berths: new codes are added, existing codes updated. Nothing is deleted."""
     _marina(db, marina_id)
     codes = [x.code for x in b.berths]
@@ -149,7 +149,7 @@ def save_plan(marina_id: str, b: PlanIn, db: Session = Depends(get_db), who: Use
 
 
 @router.post("/admin/marinas/{marina_id}/plan/read")
-async def read_plan(marina_id: str, request: Request, db: Session = Depends(get_db), who: User | None = Depends(require_admin)):
+async def read_plan(marina_id: str, request: Request, db: Session = Depends(get_db), who: User | None = Depends(require_right("berths"))):
     """Ask the AI to read a plan image: berth codes, positions and any printed sizes. Advisory only."""
     _marina(db, marina_id)
     data = await request.body()

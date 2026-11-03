@@ -94,7 +94,7 @@ def reset():
     with engine.begin() as c:
         c.exec_driver_sql(
             "DROP TABLE IF EXISTS schema_migrations, autopilot_log, owner_claims, invites, berth_holds, device_sessions, yacht_crew, yacht_photos, valuations, follows, audit_log, chain_txs, bank_accounts, users, credit_spend, holdings, investors, bookings, anchors, events, positions, trackers, "
-            "documents, compliance_config, yachts, berths, marinas CASCADE"
+            "documents, compliance_config, yachts, berths, marina_plans, marinas CASCADE"
         )
 
 

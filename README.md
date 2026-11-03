@@ -273,6 +273,22 @@ AI can add a reason to review; it never approves accounts, moves money or change
 the final call, and admins approve (or set `AUTOPILOT_AUTO_APPROVE=true` to approve owners whose every
 rule-based check passes). Without a key everything works on rules alone.
 
+## Admins and rights
+
+* The **primary admin** is the first admin (`ADMIN_EMAIL`). It holds every right, and it can't be deleted,
+  suspended or demoted. This is enforced by a database trigger (migration 010), so no code path can get around it.
+* Only the primary admin opens **Admins & rights** (`/admin/admins`). There it adds secondary admins and ticks
+  their rights: Autopilot, Monitoring, Registry (yachts, minting, hashes), Users, Investors, Banking, Berths
+  (board, plans, marinas), Bookings (escrow), Audit log and Docs. An existing account can be promoted, or a
+  new one is created with a temporary password that is shown once.
+* Every admin endpoint checks its right against the database on each request, so a removed right stops
+  working at once. Secondary admins see only the menu items they have rights for. Opening any other page
+  explains which right is missing.
+* Only the primary admin can change other admin accounts. An admin with the Users right still approves,
+  suspends and edits ordinary users.
+
+API: `GET /admin/rights`, `GET|POST /admin/admins`, `PATCH|DELETE /admin/admins/{id}`. `/auth/me` returns `is_primary` and `rights`.
+
 ## Who can sign up
 
 With `REGISTRATION_MODE=owners_and_invites` (the default), accounts are only for:

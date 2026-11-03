@@ -13,6 +13,7 @@ from .events import anchor_pending
 from . import live
 from .account import router as account_router
 from .admin import router as admin_router
+from .admins import router as admins_router
 from .photos import router as photos_router
 from .devices import router as devices_router
 from .berths import router as berths_router
@@ -104,6 +105,7 @@ app.include_router(berths_router)
 app.include_router(berthplan_router)
 app.include_router(registration_router)
 app.include_router(autopilot_router)
+app.include_router(admins_router)
 app.include_router(admin_router)
 app.include_router(router)
 
