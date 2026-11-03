@@ -280,13 +280,6 @@ td.r,th.r{text-align:right}
 .ic p{margin:0;font-size:13px;color:var(--muted)}
 .ic .meta{display:flex;gap:6px;flex-wrap:wrap}
 .note{border-left:3px solid var(--brass);padding:10px 14px;background:var(--surface2);border-radius:0 8px 8px 0;font-size:13px;max-width:90ch}
-.pitch{display:grid;gap:14px}
-.slide{display:grid;grid-template-columns:minmax(0,180px) minmax(0,1fr);gap:20px;padding:20px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
-.slide .k{font-family:var(--display);font-size:22px;font-weight:800;color:var(--accent)}
-.slide p{margin:0 0 8px;max-width:72ch}
-.slide ul{margin:0;padding-left:18px;max-width:72ch}
-.slide li{margin-bottom:4px}
-@media (max-width:640px){.slide{grid-template-columns:minmax(0,1fr);gap:8px}}
 .toast{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:8px;font-size:13px;max-width:min(380px,calc(100vw - 32px));z-index:20}
 .check{display:grid;gap:6px;margin-top:10px}
 .check div{display:flex;gap:8px;align-items:flex-start;font-size:13px}
@@ -1051,7 +1044,7 @@ tr.avail-row td { color: var(--muted); font-style: italic; }
   <div><div class="eyebrow">People &amp; money</div><a href="#users">Users &amp; approvals</a><a href="#investors">Investors &amp; KYC</a><a href="#banking">Banking details</a></div>
   <div><div class="eyebrow">Operations</div><a href="#berthboard">Berth board</a><a href="#berthplan">Berth plan to 3D</a><a href="#operations">Bookings &amp; escrow</a><a href="#marinas">Marinas &amp; berths</a></div>
   <div><div class="eyebrow">Records</div><a href="#audit">Audit log</a></div>
-  <div><div class="eyebrow">Documentation · internal</div><a href="#docs-revenue">Revenue model</a><a href="#docs-tracking">Tracking stack</a><a href="#docs-research">What to tokenize</a><a href="#docs-pitch">YC pitch</a></div>
+  <div><div class="eyebrow">Documentation · internal</div><a href="#docs-revenue">Revenue model</a><a href="#docs-tracking">Tracking stack</a><a href="#docs-research">What to tokenize</a></div>
   <div class="chain small"><span class="dot"></span><span id="chainStat">Proof chain · block —</span></div>
 </aside>
 <div class="views">
@@ -1809,16 +1802,6 @@ tr.avail-row td { color: var(--muted); font-style: italic; }
   </div>
 </section>
 
-<!-- ============ PITCH ============ -->
-<section class="view" id="v-pitch" data-view="docs-pitch" hidden>
-  <div>
-    <div class="eyebrow">Documentation · internal · Y Combinator outline</div>
-    <h1>GYT: the trust layer for the world's yachts</h1>
-    <p class="lede">Written the way YC reads applications: one clear sentence, a sharp problem, why now, and what you will do in the next three months.</p>
-  </div>
-  <div class="pitch" id="pitchSlides"></div>
-</section>
-
 <footer class="foot2">
   <div class="foot2-grid">
     <div class="foot2-brand"><a class="brand2" href="#home" aria-label="GYT home"><span class="mark" data-logo></span><span class="wm"><b>GYT</b><small>Global Yacht<br>Tokenization</small></span></a>
@@ -2424,20 +2407,6 @@ $('#mMoves').addEventListener('click',async e=>{const b=e.target.closest('[data-
   renderMarina();toast(`${x.yacht} checked in at ${x.berth}. No GYT escrow on this booking, so only the check-in is logged.`)});
 
 /* ---------- Pitch ---------- */
-const PITCH=[
- ['One line','<p><b>GYT is the verified operating system for yachts: one passport per vessel that proves who owns it, where it is and what happened to it, so it can be insured, berthed, chartered and co-owned without trust gaps.</b></p>'],
- ['Problem','<ul><li>A $20M yacht has no shared source of truth. Ownership sits in a flag registry, history in a captain\'s logbook, location in AIS that anyone can switch off.</li><li>Owners use their yacht a few weeks a year but cannot sell part of it or prove its condition to a buyer or lender.</li><li>Marinas run berths on spreadsheets and phone calls; empty berths and no-show deposits cost them money.</li><li>Insurers and lenders price risk with almost no verified usage data.</li></ul>'],
- ['Solution','<ul><li><b>Yacht Passport:</b> a digital twin linked to the official registry, with documents, inspections and insurance verified.</li><li><b>Fused tracking:</b> AIS + signed onboard GPS + satellite SAR (OSIRIS-style detection), hashed and anchored on-chain.</li><li><b>Berth network:</b> marinas list compatible berths; yachts book with escrowed deposits and proof of arrival.</li><li><b>Compliant tokenization:</b> permissioned economic units and usage rights, with a policy engine that checks KYC, jurisdiction and caps before any transfer.</li></ul>'],
- ['What only we do','<ul><li><b>Use or Earn:</b> every unit carries yearly usage credits. Holders spend them on nights aboard any verified yacht in the network, or pool them and get paid when guests book. Investment platforms like Shipfinex pay dividends only; they offer no use of the asset and no cross-fleet access.</li><li><b>Proof-of-Arrival escrow:</b> charter and berth money releases only when AIS, signed GPS and satellite SAR agree the yacht arrived. It removes no-show and fake-delivery disputes for marinas and charterers.</li><li><b>Live condition score:</b> valuation bands move with verified inspections, insurance, service logs and tracking integrity, instead of a once-a-year appraisal.</li><li><b>Self-verifiable records:</b> anyone can recompute a Merkle proof in the browser without trusting GYT.</li></ul>'],
- ['Why now','<ul><li>Tokenized real-world assets reached about $33.5B on-chain by mid-2026, roughly four times early 2025.</li><li>Regulators now license this: Dubai\'s VARA granted in-principle approval to a maritime tokenization platform in 2026; MiCA is live in the EU.</li><li>Free SAR imagery from Sentinel-1 and published detection models make independent vessel verification cheap for the first time.</li><li>Starlink gives yachts always-on connectivity for signed telemetry.</li></ul>'],
- ['Market','<ul><li>About 2,157 pre-owned superyachts listed for sale, worth $18.8B, representing 17% of the 24 m+ fleet.</li><li>612 yachts over 30 m under construction across 142 shipyards.</li><li>Beachhead: 30–40 m yachts in Dubai / Abu Dhabi, where transactions are most frequent and marina investment is heavy.</li></ul>'],
- ['Business model','<p>Nine revenue streams across four layers (see Revenue model tab). Start with licence-free SaaS: marina software, berth commission, tracking subscription and onboarding. Add issuance and trading fees through a licensed partner. Sell verified data to insurers and lenders.</p>'],
- ['Competition','<ul><li><b>Shipfinex:</b> tokenizes commercial ships for investors. No yacht operations layer.</li><li><b>Mustaa:</b> yacht usage tokens. No tracking or marina network.</li><li><b>Brokers and marina software:</b> fragmented, no shared identity or proof.</li><li><b>Our edge:</b> we own the verified data layer, which every other product needs and which grows more valuable with every yacht and marina added.</li></ul>'],
- ['Next 3 months','<ul><li>Sign 3 marinas in one corridor and list their berths.</li><li>Onboard 20 yachts through 2 management companies; install trackers on 5.</li><li>Ship SAR cross-check on Sentinel-1 for the Gulf.</li><li>Sign a letter of intent with one marine insurer for verified usage data.</li><li>Select a licensed tokenization partner for the first SPV.</li></ul>'],
- ['Ask','<p>Fill in your raise and use of funds. Typical structure for this stage: product and tracking hardware, compliance and licensing, marina partnerships in the first corridor. Add team bios showing maritime, blockchain and regulatory experience; YC weighs the team heavily.</p>'],
-];
-$('#pitchSlides').innerHTML=PITCH.map(p=>`<div class="slide"><div class="k">${p[0]}</div><div>${p[1]}</div></div>`).join('');
-
 /* =====================================================================
    v3: accounts, access, Track & verify, admin console
    ===================================================================== */
@@ -2496,7 +2465,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button[data-conf
 /* ---------- navigation ---------- */
 const PUBLIC_V=['home','explore','map','how','about','signin','signup'];
 const SIGNED_V=['track','device','berths','earn','onboard','account','settings'];
-const ADMIN_V=['admin','autopilot','berthboard','berthplan','monitoring','yachts','hashes','users','investors','banking','operations','marinas','audit','docs-revenue','docs-tracking','docs-research','docs-pitch'];
+const ADMIN_V=['admin','autopilot','berthboard','berthplan','monitoring','yachts','hashes','users','investors','banking','operations','marinas','audit','docs-revenue','docs-tracking','docs-research'];
 const ALL_V=[...PUBLIC_V,...SIGNED_V,...ADMIN_V];
 let afterSignIn=null;
 /* ---------- v4: logo + navigation builder ---------- */
