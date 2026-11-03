@@ -11,7 +11,8 @@
                held:   { loa } | null }],                     // another yacht holding it
     yacht:    { name, loa, beam } | null,                     // the yacht you're finding a berth for
     selected: code | null,
-  });
+    plan:     { image, width, height } | null,                // optional: the marina's own berth plan, in metres;
+  });                                                         //   berths then take `at: {x, z, rot}` on that plan
   m.dock(code)      // your yacht sails in and moors stern-to in that berth
   m.dispose()
 
@@ -142,83 +143,125 @@ export function createMarina3D(THREE, el, opts = {}) {
   let slots = [];          // { code, mesh, cx, len, width, outline, held }
   let mine = null;         // your yacht's group
   let state = { berths: [], yacht: null, selected: null };
-  let layout = { cx: 0, depth: 40, width: 80 };
-  const disposeTree = o => o.traverse(n => { if (n.geometry) n.geometry.dispose(); if (n.material && !Object.values(M).includes(n.material)) { if (n.material.map) n.material.map.dispose(); n.material.dispose(); } });
+  let layout = { width: 80, depth: 40, tx: 0, tz: 18 };
+  const disposeTree = o => o.traverse(n => { if (n.geometry) n.geometry.dispose(); if (n.material && !Object.values(M).includes(n.material)) { if (n.material.map && !n.userData.keepMap) n.material.map.dispose(); n.material.dispose(); } });
 
+  // Two layouts. Standard: berths side by side along one pontoon, generated from their sizes.
+  // Plan: the marina's own berth plan (an uploaded image, `plan: {image, width, height}` in metres)
+  // lies on the water and each berth sits where the plan shows it (`at: {x, z, rot}`: the centre of
+  // its pontoon end in metres from the plan's centre, x to the right, z down the image, rot = the
+  // direction the berth runs from the pontoon, in radians, 0 = down the image).
+  let planTex = { url: null, tex: null };
+  let bobbers = [];
+  function planTexture(url) {
+    if (planTex.url === url) return planTex.tex;
+    if (planTex.tex) planTex.tex.dispose();
+    const tex = new THREE.TextureLoader().load(url, () => wake());
+    if ('colorSpace' in tex && THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    planTex = { url, tex };
+    return tex;
+  }
   function build() {
     scene.remove(root); disposeTree(root);
     root = new THREE.Group(); scene.add(root);
-    slots = []; mine = null;
+    slots = []; mine = null; bobbers = [];
     const bs = state.berths || [];
-    if (!bs.length) return;
+    const plan = state.plan && state.plan.width > 0 && state.plan.height > 0 ? state.plan : null;
+    if (!bs.length && !plan) return;
     const GAP = 1.2; // finger pier
-    let x = 0;
-    const placed = bs.map(b => { const w = Math.max(b.beam + 1.6, 5); const cx = x + w / 2; x += w + GAP; return { b, cx, w }; });
-    const total = x - GAP;
-    const off = -total / 2;
-    const maxL = Math.max(...bs.map(b => b.loa));
-    layout = { cx: 0, depth: maxL, width: total };
-    // main pontoon with a walkway edge and bollards
-    const pont = new THREE.Mesh(new THREE.BoxGeometry(total + 14, 0.7, 3.4), M.deck);
-    pont.position.set(0, 0.2, -1.7); root.add(pont);
-    const shore = new THREE.Mesh(new THREE.BoxGeometry(total + 60, 1.4, 22), mat(0xcdbf9f, { roughness: 0.95 }));
-    shore.position.set(0, 0.45, -14.4); root.add(shore);
-    const prom = new THREE.Mesh(new THREE.BoxGeometry(total + 60, 0.12, 4), mat(0xa7b4ba, { roughness: 0.9 }));
-    prom.position.set(0, 1.2, -6); root.add(prom);
-    placed.forEach(({ b, cx, w }, i) => {
-      const X = off + cx;
-      const len = b.loa;
-      // finger pier on the right of each berth
-      if (i < placed.length - 1) {
-        const fp = new THREE.Mesh(new THREE.BoxGeometry(GAP * 0.8, 0.45, Math.min(len, placed[i + 1].b.loa) * 0.72), M.pier);
-        fp.position.set(off + cx + w / 2 + GAP / 2, 0.1, fp.geometry.parameters.depth / 2); root.add(fp);
+    const yLift = plan ? 0.1 : 0;   // in plan mode everything sits just above the plan image
+    let placed;
+    if (plan) {
+      const W = plan.width, H = plan.height;
+      if (plan.image) {
+        const pm = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: planTexture(plan.image), transparent: true, opacity: 0.94, depthWrite: false }));
+        pm.rotation.x = -Math.PI / 2; pm.position.y = 0.08; pm.userData.keepMap = true; pm.renderOrder = -1; root.add(pm);
+        const frame = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(W, 0.01, H)), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 }));
+        frame.position.y = 0.09; root.add(frame);
       }
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.6, 8), M.post);
-      post.position.set(X - w / 2 + 0.4, 0.75, -0.3); root.add(post);
-      const post2 = post.clone(); post2.position.x = X + w / 2 - 0.4; root.add(post2);
-      // the berth's water slot, coloured by state
+      // berths the plan does not place go in a row just below it
+      let rx = -W / 2;
+      placed = bs.map(b => {
+        const w = Math.max(b.beam + 0.6, 3);
+        if (b.at && isFinite(b.at.x) && isFinite(b.at.z)) return { b, w, x: b.at.x, z: b.at.z, rot: b.at.rot || 0 };
+        const x = rx + w / 2; rx += w + GAP;
+        return { b, w, x, z: H / 2 + 6, rot: 0 };
+      });
+      const maxL = Math.max(10, ...bs.map(b => b.loa));
+      layout = { width: Math.max(W, rx + W / 2), depth: H + (placed.some(p => !(p.b.at)) ? maxL + 12 : 0), tx: 0, tz: placed.some(p => !(p.b.at)) ? (maxL + 12) / 2 : 0 };
+    } else {
+      let x = 0;
+      const row = bs.map(b => { const w = Math.max(b.beam + 1.6, 5); const cx = x + w / 2; x += w + GAP; return { b, cx, w }; });
+      const total = x - GAP;
+      const off = -total / 2;
+      const maxL = Math.max(...bs.map(b => b.loa));
+      layout = { width: total, depth: maxL, tx: 0, tz: maxL * 0.45 };
+      placed = row.map(r => ({ b: r.b, w: r.w, x: off + r.cx, z: 0, rot: 0 }));
+      // main pontoon with a walkway edge, and the shore
+      const pont = new THREE.Mesh(new THREE.BoxGeometry(total + 14, 0.7, 3.4), M.deck);
+      pont.position.set(0, 0.2, -1.7); root.add(pont);
+      const shore = new THREE.Mesh(new THREE.BoxGeometry(total + 60, 1.4, 22), mat(0xcdbf9f, { roughness: 0.95 }));
+      shore.position.set(0, 0.45, -14.4); root.add(shore);
+      const prom = new THREE.Mesh(new THREE.BoxGeometry(total + 60, 0.12, 4), mat(0xa7b4ba, { roughness: 0.9 }));
+      prom.position.set(0, 1.2, -6); root.add(prom);
+      placed.forEach(({ b, w, x }, i) => {
+        if (i < placed.length - 1) {
+          const fp = new THREE.Mesh(new THREE.BoxGeometry(GAP * 0.8, 0.45, Math.min(b.loa, placed[i + 1].b.loa) * 0.72), M.pier);
+          fp.position.set(x + w / 2 + GAP / 2, 0.1, fp.geometry.parameters.depth / 2); root.add(fp);
+        }
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.6, 8), M.post);
+        post.position.set(x - w / 2 + 0.4, 0.75, -0.3); root.add(post);
+        const post2 = post.clone(); post2.position.x = x + w / 2 - 0.4; root.add(post2);
+      });
+    }
+    placed.forEach(({ b, w, x, z, rot }) => {
+      // each berth is a group: local z runs from its pontoon end (0) out to its length
+      const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rot; root.add(g);
+      const len = b.loa;
       const color = b.best && b.state === 'available' ? COLORS.best : (COLORS[b.state] ?? 0x8a98a6);
-      const slotMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: b.state === 'too_small' ? 0.12 : 0.3, depthWrite: false });
+      const slotMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: b.state === 'too_small' ? 0.12 : plan ? 0.42 : 0.3, depthWrite: false });
       const slot = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.4, len), slotMat);
-      slot.rotation.x = -Math.PI / 2; slot.position.set(X, -0.05, len / 2 + 0.3); root.add(slot);
+      slot.rotation.x = -Math.PI / 2; slot.position.set(0, -0.05 + yLift, len / 2 + 0.3); g.add(slot);
       const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w - 0.4, 0.01, len)), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95 }));
-      edges.position.set(X, 0.02, len / 2 + 0.3); root.add(edges);
+      edges.position.set(0, 0.02 + yLift, len / 2 + 0.3); g.add(edges);
       const lab = label(b.code, `${b.loa} m${b.best && b.state === 'available' ? ' ★' : ''}`, b.state === 'too_small' ? '#7b8790' : '#0d1f2d');
-      lab.position.set(X, 4.2, len + 4.5); root.add(lab);
-      const rec = { code: b.code, mesh: slot, edges, cx: X, len, w, held: null, state: b.state };
-      // a yacht moored there
+      lab.position.set(0, 4.2, len + 4.5); g.add(lab);
+      const rec = { code: b.code, mesh: slot, edges, group: g, len, w, held: null, state: b.state };
       if (b.moored) {
         const y = yachtModel(b.moored.loa, b.moored.beam, 'solid');
-        y.position.set(X, 0, 0.8); y.userData.bob = Math.random() * 6; root.add(y);
+        y.position.set(0, 0, 0.8); y.userData.bob = Math.random() * 6; g.add(y); bobbers.push(y);
         if (b.moored.misfit) {
           const warn = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.6, Math.max(0.5, b.moored.loa - len) + 1.2), new THREE.MeshBasicMaterial({ color: 0xd9433b, transparent: true, opacity: 0.45, depthWrite: false }));
-          warn.rotation.x = -Math.PI / 2; warn.position.set(X, -0.02, len + 0.3 + (b.moored.loa - len) / 2); root.add(warn);
+          warn.rotation.x = -Math.PI / 2; warn.position.set(0, -0.02 + yLift, len + 0.3 + (b.moored.loa - len) / 2); g.add(warn);
           rec.warn = warn;
         }
       }
-      // another yacht holding it: an amber outline yacht that pulses
       if (b.held) {
         const y = yachtModel(b.held.loa, Math.min(b.beam, b.held.loa * 0.24), 'ghost', 0xe08a1e);
-        y.position.set(X, 0, 0.8); root.add(y); rec.held = y;
+        y.position.set(0, 0, 0.8); g.add(y); rec.held = y;
       }
       slots.push(rec);
     });
     placeMine();
   }
+  // a point in a berth's own frame (x across, z out from the pontoon) in world coordinates
+  const worldOf = (s, x, z) => s.group.localToWorld(new THREE.Vector3(x, 0, z));
+  const dropMine = () => { if (mine) { if (mine.parent) mine.parent.remove(mine); disposeTree(mine); mine = null; } };
 
   // your yacht: a ghost in the selected berth (red where it doesn't fit), or moored when it's yours
   function placeMine() {
-    if (mine) { root.remove(mine); disposeTree(mine); mine = null; }
+    dropMine();
     const y = state.yacht; if (!y) return;
     const s = slots.find(r => r.code === state.selected) || slots.find(r => r.state === 'held_by_you' || r.state === 'booked_by_you');
     if (!s) return;
     const fits = y.loa <= s.len && y.beam <= s.w - 0.4;
     const owned = s.state === 'held_by_you' || s.state === 'booked_by_you';
     mine = yachtModel(y.loa, y.beam, owned ? 'solid' : 'ghost', owned ? 0xf4f6f8 : fits ? 0x14a3a6 : 0xd9433b);
-    mine.position.set(s.cx, 0, 0.8);
+    mine.position.set(0, 0, 0.8);
     mine.userData.code = s.code;
     mine.userData.bob = 1.3;
-    root.add(mine);
+    s.group.add(mine);
   }
 
   // ---------- camera control ----------
@@ -229,7 +272,7 @@ export function createMarina3D(THREE, el, opts = {}) {
     const fitW = (layout.width * 0.62) / (half * Math.max(0.5, Math.min(camera.aspect, 1.8)));
     const fitD = (layout.depth * 0.5) / half;
     cam.r = Math.min(360, Math.max(40, fitW, fitD));
-    cam.tx = 0; cam.tz = layout.depth * 0.45;
+    cam.tx = layout.tx; cam.tz = layout.tz;
   }
   function placeCamera() {
     const { theta, phi, r, tx, tz } = cam;
@@ -293,15 +336,17 @@ export function createMarina3D(THREE, el, opts = {}) {
   function dock(code) {
     const s = slots.find(r => r.code === code); const y = state.yacht;
     if (!s || !y) return;
-    if (mine) { root.remove(mine); disposeTree(mine); }
+    dropMine();
     mine = yachtModel(y.loa, y.beam, 'solid');
     mine.userData.code = code;
-    root.add(mine);
-    const far = { x: s.cx + 70, z: s.len + 90 };
-    const turn = { x: s.cx, z: s.len + y.loa * 0.9 + 10 };
+    s.group.add(mine);
+    // all in the berth's own frame, so it works for any berth angle
+    const far = { x: 70, z: s.len + 90 };
+    const turn = { x: 0, z: s.len + y.loa * 0.9 + 10 };
     dockAnim = { s, t0: performance.now(), dur: reduce ? 1 : 7000, far, turn };
     cam.auto = false;
-    cam.tx = s.cx; cam.tz = s.len * 0.7; cam.r = Math.max(60, s.len * 2.6); cam.phi = 0.9;
+    const c = worldOf(s, 0, s.len * 0.7);
+    cam.tx = c.x; cam.tz = c.z; cam.r = Math.max(60, s.len * 2.6); cam.phi = 0.9;
     wake();
   }
   function stepDock(now) {
@@ -337,7 +382,7 @@ export function createMarina3D(THREE, el, opts = {}) {
         wpos.setY(i, Math.sin(x * 0.09 + t * 1.1) * 0.12 + Math.cos(z * 0.11 + t * 0.8) * 0.1);
       }
       wpos.needsUpdate = true;
-      root.children.forEach(o => { if (o.userData && o.userData.L && o !== mine) o.position.y = Math.sin(t * 1.3 + (o.userData.bob || 0)) * 0.08; });
+      bobbers.forEach(o => { o.position.y = Math.sin(t * 1.3 + (o.userData.bob || 0)) * 0.08; });
       if (mine && !dockAnim) mine.position.y = Math.sin(t * 1.3 + 1.3) * 0.08;
       slots.forEach(s => { if (s.held) s.held.children.forEach(c => { if (c.material) c.material.opacity = 0.3 + 0.25 * (0.5 + 0.5 * Math.sin(t * 3)); }); if (s.warn) s.warn.material.opacity = 0.3 + 0.25 * (0.5 + 0.5 * Math.sin(t * 4)); });
     }
@@ -368,13 +413,14 @@ export function createMarina3D(THREE, el, opts = {}) {
   let firstFrame = true;
   return {
     set(next) {
-      const prevCodes = (state.berths || []).map(b => b.code).join();
+      const key = st => (st.berths || []).map(b => b.code + (b.at ? `@${b.at.x},${b.at.z},${b.at.rot}` : '')).join() + (st.plan ? `|${st.plan.image}|${st.plan.width}x${st.plan.height}` : '');
+      const prev = key(state);
       state = Object.assign({}, state, next);
       build();
-      if (firstFrame || prevCodes !== (state.berths || []).map(b => b.code).join()) { frameAll(); firstFrame = false; }
+      if (firstFrame || prev !== key(state)) { frameAll(); firstFrame = false; }
       wake();
     },
-    select(code) { state.selected = code; placeMine(); const s = slots.find(r => r.code === code); if (s) { cam.tx += (s.cx - cam.tx) * 0.6; } wake(); },
+    select(code) { state.selected = code; placeMine(); const s = slots.find(r => r.code === code); if (s) { const c = worldOf(s, 0, s.len / 2); cam.tx += (c.x - cam.tx) * 0.6; cam.tz += (c.z - cam.tz) * 0.6; } wake(); },
     dock,
     /** Where a berth sits on screen (client px), or null: used for guided tours and tests. */
     screenOf(code) {
@@ -385,7 +431,7 @@ export function createMarina3D(THREE, el, opts = {}) {
     },
     resetView() { frameAll(); cam.auto = !reduce; wake(); },
     dispose() {
-      cancelAnimationFrame(raf); if (ro) ro.disconnect(); if (io) io.disconnect();
+      cancelAnimationFrame(raf); if (planTex.tex) planTex.tex.dispose(); if (ro) ro.disconnect(); if (io) io.disconnect();
       document.removeEventListener('visibilitychange', vis);
       disposeTree(scene); renderer.dispose(); canvas.remove();
     },

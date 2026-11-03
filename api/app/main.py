@@ -16,6 +16,7 @@ from .admin import router as admin_router
 from .photos import router as photos_router
 from .devices import router as devices_router
 from .berths import router as berths_router
+from .berthplan import router as berthplan_router
 from .registration import router as registration_router
 from .autopilot import router as autopilot_router
 from .auth import router as auth_router
@@ -100,6 +101,7 @@ app.include_router(account_router)
 app.include_router(photos_router)
 app.include_router(devices_router)
 app.include_router(berths_router)
+app.include_router(berthplan_router)
 app.include_router(registration_router)
 app.include_router(autopilot_router)
 app.include_router(admin_router)

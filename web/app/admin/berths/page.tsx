@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { Head, call, useData } from "@/components/admin/kit";
+import Link from "next/link";
 import type { Berth3D } from "@/lib/marina3d";
+import { useMarinaPlan, withPlan } from "@/components/useMarinaPlan";
 
 const Marina3DView = dynamic(() => import("@/components/Marina3DView"), { ssr: false });
 
@@ -31,7 +33,8 @@ export default function BerthBoard() {
   }, [reload]);
   const [view, setView] = useState<"board" | "3d">("board");
   const [pickedCode, setPickedCode] = useState<string | null>(null);
-  const scene3d = useMemo(() => ({
+  const plan = useMarinaPlan(marina);
+  const scene3d = useMemo(() => withPlan({
     berths: (data?.berths ?? []).map((b): Berth3D => ({
       code: b.code, loa: b.max_loa_m, beam: b.max_beam_m, depth: b.max_draft_m,
       state: b.state === "free" ? "available" : b.state,
@@ -39,7 +42,7 @@ export default function BerthBoard() {
       held: b.hold ? { loa: b.hold.loa_m } : null,
     })),
     yacht: null, selected: null,
-  }), [data]);
+  }, plan), [data, plan]);
   const picked = data?.berths.find((b) => b.code === pickedCode) ?? null;
   const issues = useMemo(() => data?.berths.reduce((n, b) => n + b.issues.length, 0) ?? 0, [data]);
 
@@ -49,6 +52,7 @@ export default function BerthBoard() {
         <select value={marina} onChange={(e) => setMarina(e.target.value)} aria-label="Marina">{marinas.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
         <input type="date" value={day} onChange={(e) => setDay(e.target.value)} aria-label="Day" />
         <span className="small muted"><span className="livedot" aria-hidden="true" /> live</span>
+        <Link className="btn" href="/admin/berths/plan">Import a berth plan</Link>
       </Head>
       {err && <p className="err">{err}</p>}
       <div className="grid g4">
@@ -65,7 +69,7 @@ export default function BerthBoard() {
           <Marina3DView state={scene3d} onPick={setPickedCode} height="min(62vh, 560px)" />
           <p className="small muted" style={{ margin: "10px 0 0" }}>
             {picked ? <>Berth <b>{picked.code}</b> ({picked.max_loa_m} m): {picked.booking ? `${picked.booking.yacht}, ${picked.booking.loa_m} m, ${picked.booking.status}` : picked.hold ? `held by ${picked.hold.yacht} (${picked.hold.loa_m} m)` : picked.state}{picked.issues.length ? ` · ${picked.issues.join("; ")}` : ""}</>
-              : "Yachts are drawn to scale in their berths; a yacht too long for its berth sticks out over a red band. Tap a berth for details."}
+              : <>Yachts are drawn to scale in their berths; a yacht too long for its berth sticks out over a red band. Tap a berth for details.{plan?.plan ? " Laid out from this marina's imported berth plan." : <> To use this marina&apos;s real layout, <Link href="/admin/berths/plan">import its berth plan</Link>.</>}</>}
           </p>
         </div>
       )}
