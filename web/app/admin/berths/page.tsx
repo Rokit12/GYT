@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { Head, call, useData } from "@/components/admin/kit";
+import type { Berth3D } from "@/lib/marina3d";
+
+const Marina3DView = dynamic(() => import("@/components/Marina3DView"), { ssr: false });
 
 type B = {
   id: number; code: string; max_loa_m: number; max_beam_m: number; max_draft_m: number | null; rate_usd_day: number;
@@ -25,6 +29,18 @@ export default function BerthBoard() {
     const c = setInterval(() => setNow(Date.now()), 1000);
     return () => { clearInterval(t); clearInterval(c); };
   }, [reload]);
+  const [view, setView] = useState<"board" | "3d">("board");
+  const [pickedCode, setPickedCode] = useState<string | null>(null);
+  const scene3d = useMemo(() => ({
+    berths: (data?.berths ?? []).map((b): Berth3D => ({
+      code: b.code, loa: b.max_loa_m, beam: b.max_beam_m, depth: b.max_draft_m,
+      state: b.state === "free" ? "available" : b.state,
+      moored: b.booking ? { loa: b.booking.loa_m, beam: Math.min(b.max_beam_m * 0.95, b.booking.loa_m * 0.23), name: b.booking.yacht, misfit: b.issues.some((i) => i.startsWith("Booked yacht does not fit")) } : null,
+      held: b.hold ? { loa: b.hold.loa_m } : null,
+    })),
+    yacht: null, selected: null,
+  }), [data]);
+  const picked = data?.berths.find((b) => b.code === pickedCode) ?? null;
   const issues = useMemo(() => data?.berths.reduce((n, b) => n + b.issues.length, 0) ?? 0, [data]);
 
   return (
@@ -40,7 +56,20 @@ export default function BerthBoard() {
           <div key={k} className="panel kpi"><div className="l">{k === "held" ? "Held right now" : k[0].toUpperCase() + k.slice(1)}</div><div className="v">{data?.counts[k] ?? "—"}</div></div>
         ))}
       </div>
-      <div className="board">
+      <div className="seg" role="group" aria-label="Board view">
+        <button aria-pressed={view === "board"} onClick={() => setView("board")}>Board</button>
+        <button aria-pressed={view === "3d"} onClick={() => setView("3d")}>3D marina</button>
+      </div>
+      {view === "3d" && (
+        <div className="panel">
+          <Marina3DView state={scene3d} onPick={setPickedCode} height="min(62vh, 560px)" />
+          <p className="small muted" style={{ margin: "10px 0 0" }}>
+            {picked ? <>Berth <b>{picked.code}</b> ({picked.max_loa_m} m): {picked.booking ? `${picked.booking.yacht}, ${picked.booking.loa_m} m, ${picked.booking.status}` : picked.hold ? `held by ${picked.hold.yacht} (${picked.hold.loa_m} m)` : picked.state}{picked.issues.length ? ` · ${picked.issues.join("; ")}` : ""}</>
+              : "Yachts are drawn to scale in their berths; a yacht too long for its berth sticks out over a red band. Tap a berth for details."}
+          </p>
+        </div>
+      )}
+      <div className="board" hidden={view === "3d"}>
         {data?.berths.map((b) => (
           <div key={b.id} className={`bslot st-${b.state} ${b.issues.length ? "has-issue" : ""}`}>
             <div className="row" style={{ justifyContent: "space-between" }}><b>{b.code}</b><span className="small muted">{b.max_loa_m} × {b.max_beam_m} m{b.max_draft_m ? ` · ${b.max_draft_m} m deep` : ""}</span></div>

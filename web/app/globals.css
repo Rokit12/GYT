@@ -953,3 +953,54 @@ tr.avail-row td { color: var(--muted); font-style: italic; }
 .aplist li.res { opacity: .55; }
 @media (max-width: 760px) { .aplist li { grid-template-columns: auto minmax(0, 1fr); } }
 .ap-status .pill { justify-self: start; }
+
+/* ---------------- v8: 3D marina ---------------- */
+.m3d { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: #cfe3ec; max-width: 100%; min-height: 260px; isolation: isolate; }
+.m3d-canvas { position: absolute; inset: 0; }
+.m3d-msg { position: absolute; inset: auto 0 0 0; margin: 0; padding: 10px 14px; color: #0d1f2d; background: rgba(255,255,255,.85); }
+.m3d-tools { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; pointer-events: none; }
+.m3d-tools > * { pointer-events: auto; }
+.m3d-tools button { background: rgba(255,255,255,.92); color: #0d1f2d; border-color: rgba(13,31,45,.2); }
+.m3d-hint { padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,.85); color: #33454f; }
+.bf-view { margin-bottom: 10px; }
+.bf-scroll[hidden] { display: none; }
+[hidden] { display: none !important; }
+
+/* ---------------- v8: phones ---------------- */
+.seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.seg::-webkit-scrollbar { display: none; }
+.seg button, .seg a { white-space: nowrap; flex: none; }
+.aplist li > * { min-width: 0; overflow-wrap: anywhere; }
+main, .admin-main, .panel { min-width: 0; }
+.panel { max-width: 100%; }
+pre, code { overflow-wrap: anywhere; }
+@media (max-width: 860px) {
+  /* admin menu becomes one swipeable row that stays under the header */
+  .admin-nav { display: flex; gap: 6px; overflow-x: auto; position: sticky; top: 64px; z-index: 6; margin-inline: -16px; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid var(--line); scrollbar-width: none; }
+  .admin-nav::-webkit-scrollbar { display: none; }
+  .admin-nav > div { display: contents; }
+  .admin-nav .eyebrow { display: none; }
+  .admin-nav a { flex: none; white-space: nowrap; padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+  .admin-nav a[aria-current="page"] { box-shadow: none; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .admin-shell { gap: 14px; padding-block: 8px 48px; }
+}
+@media (max-width: 760px) {
+  input, select, textarea { font-size: 16px; } /* stops phones zooming in on focus */
+  h1 { font-size: clamp(30px, 9vw, 44px); }
+  .row { flex-wrap: wrap; }
+  .grid.g4, .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi .v { font-size: 26px; }
+  .bf-act { flex-direction: column; align-items: stretch; }
+  .bf-act .lg { width: 100%; }
+  .m3d { min-height: 320px; }
+  .m3d-hint { display: none; }
+}
+@media (pointer: coarse) {
+  button, .btn, select { min-height: 40px; }
+  .seg button { min-height: 36px; }
+  .m3d-tools button { min-height: 36px; }
+}
+.seg { min-width: 0; }
+.row > * { min-width: 0; max-width: 100%; }
+input, select, textarea { max-width: 100%; }
+main, .admin-main { grid-template-columns: minmax(0, 1fr); }

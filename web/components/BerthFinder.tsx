@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { call, usd } from "@/lib/api";
+import dynamic from "next/dynamic";
+import type { Berth3D } from "@/lib/marina3d";
+
+const Marina3DView = dynamic(() => import("@/components/Marina3DView"), { ssr: false, loading: () => <p className="small muted">Loading the 3D marina…</p> });
 
 /*
   Find a berth for your yacht. The pontoon drawing shows every berth at the marina to scale, with your
@@ -47,6 +51,9 @@ export default function BerthFinder() {
   const [now, setNow] = useState(Date.now());
   const [booked, setBooked] = useState<{ ref: string; berth: string; amount: number } | null>(null);
   const prev = useRef<Map<number, Berth["state"]>>(new Map());
+  const [view, setView] = useState<"plan" | "3d">(() => { try { return (localStorage.getItem("gyt.berthview") as "plan" | "3d") || "3d"; } catch { return "3d"; } });
+  const [dockCode, setDockCode] = useState<string | null>(null);
+  const pickView = (v: "plan" | "3d") => { setView(v); try { localStorage.setItem("gyt.berthview", v); } catch { /* storage blocked */ } };
 
   useEffect(() => {
     call<{ yachts: Mine[] }>("/me/trackable").then((r) => {
@@ -114,6 +121,7 @@ export default function BerthFinder() {
     try {
       const r = await call<{ ref: string; berth: string; amount_usd: number }>(`/berths/holds/${b.hold_id}/confirm`, { method: "POST", body: JSON.stringify({ ref }) });
       setBooked({ ref: r.ref, berth: r.berth, amount: r.amount_usd });
+      setDockCode(r.berth);
       setNote(null);
     } catch (e) {
       setNote({ ok: false, t: (e as Error).message });
@@ -121,6 +129,19 @@ export default function BerthFinder() {
     setBusy(false);
     load();
   }
+
+  // the same berths for the 3D view
+  const scene3d = useMemo(() => {
+    if (!data) return null;
+    const heldLoa = (b: Berth) => Number((b.held_by ?? "").match(/([\d.]+) m/)?.[1] ?? b.max_loa_m * 0.8);
+    const berths: Berth3D[] = data.berths.map((b) => ({
+      code: b.code, loa: b.max_loa_m, beam: b.max_beam_m, depth: b.max_draft_m, state: b.state, best: !!b.best_fit,
+      moored: b.state === "booked" ? { loa: Math.round(b.max_loa_m * 0.85), beam: Math.round(b.max_beam_m * 0.8 * 10) / 10 }
+        : b.state === "booked_by_you" && b.id !== sel ? { loa: data.yacht.loa_m, beam: data.yacht.beam_m, name: data.yacht.name } : null,
+      held: b.state === "held" ? { loa: heldLoa(b) } : null,
+    }));
+    return { berths, yacht: { name: data.yacht.name, loa: data.yacht.loa_m, beam: data.yacht.beam_m }, selected: chosen?.code ?? null };
+  }, [data, chosen]);
 
   // pontoon drawing, to scale
   const drawing = useMemo(() => {
@@ -175,7 +196,15 @@ export default function BerthFinder() {
           <div className="panel">
             <header><h3>{data.yacht.name}: {data.yacht.loa_m} m × {data.yacht.beam_m} m{data.yacht.draft_m ? `, draft ${data.yacht.draft_m} m` : ""}</h3>
               <span className="legend bf-legend small"><span><i className="swc swc-free" />Fits</span><span><i className="swc swc-best" />Best fit</span><span><i className="swc swc-held" />Held by another yacht</span><span><i className="swc swc-mine" />Yours</span><span><i className="swc swc-small" />Too small</span><span><i className="swc swc-booked" />Booked</span></span></header>
-            <div className="bf-scroll">
+            <div className="seg bf-view" role="group" aria-label="Berth view">
+              <button type="button" aria-pressed={view === "3d"} onClick={() => pickView("3d")}>3D marina</button>
+              <button type="button" aria-pressed={view === "plan"} onClick={() => pickView("plan")}>Plan</button>
+            </div>
+            {view === "3d" && scene3d && (
+              <Marina3DView state={scene3d} dockCode={dockCode}
+                onPick={(code) => { const b = data.berths.find((x) => x.code === code); if (b) setSel(b.id); }} />
+            )}
+            <div className="bf-scroll" hidden={view === "3d"}>
               <svg className="pontoon" viewBox={`0 0 ${drawing.W} ${drawing.H}`} width={drawing.W} height={drawing.H} role="img"
                 aria-label={`Berths at this marina drawn to scale, with ${data.yacht.name}'s outline in the selected berth`}>
                 <rect x="0" y="6" width={drawing.W} height="20" rx="4" className="pt-deck" />
