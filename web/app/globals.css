@@ -1012,3 +1012,11 @@ main, .admin-main { grid-template-columns: minmax(0, 1fr); }
 .rights-pick .check input { width: auto; }
 .admin-role { margin: 14px 0 0; padding-top: 10px; border-top: 1px solid var(--line); }
 @media (max-width: 860px) { .admin-role { display: none; } }
+
+/* v10: booking size */
+.bf-size { grid-column: 1 / -1; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+.bf-size legend { padding: 0 4px; font-size: 13px; color: var(--muted); }
+.bf-size p { grid-column: 1 / -1; margin: 0; }
+.bf-size input::placeholder { color: var(--muted); opacity: .8; }
+.linklike { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; min-height: 0; }
+@media (max-width: 520px) { .bf-size { grid-template-columns: minmax(0, 1fr); } }

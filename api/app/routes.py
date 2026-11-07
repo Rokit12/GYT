@@ -380,7 +380,7 @@ def prove_arrival(ref: str, db: Session = Depends(get_db)):
     bk = row_or_404(
         db.execute(
             text(
-                """SELECT b.*, y.loa_m, y.twin_token_id, ST_Y(m.location::geometry) mlat, ST_X(m.location::geometry) mlon,
+                """SELECT b.*, y.loa_m AS hull_loa_m, y.twin_token_id, ST_Y(m.location::geometry) mlat, ST_X(m.location::geometry) mlon,
                           m.arrival_radius_m
                    FROM bookings b JOIN yachts y ON y.id=b.yacht_id JOIN marinas m ON m.id=b.marina_id WHERE b.ref=:r"""
             ),
@@ -404,7 +404,7 @@ def prove_arrival(ref: str, db: Session = Depends(get_db)):
         return fusion.Obs(src, r.lat, r.lon, r.observed_at, r.verified, r.est_length_m) if r else None
 
     res = fusion.fuse_arrival(
-        bk["mlat"], bk["mlon"], bk["arrival_radius_m"], float(bk["loa_m"]),
+        bk["mlat"], bk["mlon"], bk["arrival_radius_m"], float(bk["hull_loa_m"]),  # satellites measure the hull
         gps=latest("gps"), ais=latest("ais"), sar=latest("sar"), max_spread_m=s.fusion_max_spread_m,
         device=latest("device") if s.device_counts_for_arrival else None,
     )

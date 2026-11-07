@@ -65,7 +65,8 @@ def run(db: Session) -> dict:
     # 2. berth fit for every live booking
     rows = db.execute(text(
         """SELECT k.ref, k.marina_id, k.status, b.code, b.max_loa_m, b.max_beam_m, b.max_draft_m,
-                  y.id AS yacht_id, y.name, y.loa_m, y.beam_m, y.draft_m
+                  y.id AS yacht_id, y.name, COALESCE(k.loa_m, y.loa_m) AS loa_m, COALESCE(k.beam_m, y.beam_m) AS beam_m,
+                  COALESCE(k.draft_m, y.draft_m) AS draft_m
            FROM bookings k JOIN berths b ON b.id = k.berth_id JOIN yachts y ON y.id = k.yacht_id
            WHERE k.kind='berth' AND k.status IN ('escrowed','arrived') AND k.depart >= CURRENT_DATE""")).mappings().all()
     for r in rows:

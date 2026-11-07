@@ -78,6 +78,32 @@ def _yacht(db: Session, yacht_id: str) -> dict:
     return dict(y)
 
 
+def booked_size(y: dict, loa_m: float | None, beam_m: float | None, draft_m: float | None) -> dict:
+    """The size to book with: what the client entered, never smaller than the yacht's registered size.
+
+    Clients enter the yacht as it will lie in the berth (with bowsprit, swim platform, davits or a tender),
+    so it may be bigger than the registered hull, but never smaller: the registered figures are verified."""
+    out = dict(y)
+    for key, val, label, hi in (("loa_m", loa_m, "length overall", 200), ("beam_m", beam_m, "beam", 60), ("draft_m", draft_m, "draft", 40)):
+        if val is None:
+            continue
+        val = round(float(val), 2)
+        if not (0 < val <= hi):
+            raise HTTPException(422, f"Enter a {label} between 0 and {hi} m")
+        reg = y.get(key)
+        if reg is not None and val < float(reg) - 0.005:
+            raise HTTPException(422, f"The {label} can't be less than {y['name']}'s registered {float(reg):g} m")
+        out[key] = val
+    return out
+
+
+def _size_out(y: dict, sz: dict) -> dict:
+    num = lambda v: float(v) if v is not None else None  # noqa: E731
+    return {"loa_m": num(sz["loa_m"]), "beam_m": num(sz["beam_m"]), "draft_m": num(sz["draft_m"]),
+            "registered": {"loa_m": num(y["loa_m"]), "beam_m": num(y["beam_m"]), "draft_m": num(y["draft_m"])},
+            "custom": any(num(sz[k]) != num(y[k]) for k in ("loa_m", "beam_m", "draft_m"))}
+
+
 def _require_yacht_role(db: Session, user: User, yacht_id: str):
     if role_for(db, user, yacht_id) is None:
         raise HTTPException(403, "Only this yacht's owner, its crew or an admin can book berths for it")
@@ -87,18 +113,22 @@ def _require_yacht_role(db: Session, user: User, yacht_id: str):
 
 
 @router.get("/berths/availability")
-def availability(marina_id: str, yacht_id: str, arrive: date, depart: date, db: Session = Depends(get_db),
-                 user: User = Depends(require_user)):
-    """Every berth at a marina, as this yacht sees it right now, best fit first."""
+def availability(marina_id: str, yacht_id: str, arrive: date, depart: date,
+                 loa_m: float | None = None, beam_m: float | None = None, draft_m: float | None = None,
+                 db: Session = Depends(get_db), user: User = Depends(require_user)):
+    """Every berth at a marina, as this yacht sees it right now, best fit first.
+
+    loa_m / beam_m / draft_m: the size to book with, if the client entered one (never below the registered size)."""
     _dates(arrive, depart)
     y = _yacht(db, yacht_id)
+    sz = booked_size(y, loa_m, beam_m, draft_m)
     expire_holds(db)
     db.commit()
     rows = db.execute(
         text(
             """SELECT b.id, b.code, b.max_loa_m, b.max_beam_m, b.max_draft_m, b.rate_usd_day, b.services, b.status,
                       (SELECT json_build_object('id', h.id, 'yacht_id', h.yacht_id, 'user_id', h.user_id,
-                                                'loa_m', hy.loa_m, 'expires_at', h.expires_at)
+                                                'loa_m', COALESCE(h.loa_m, hy.loa_m), 'expires_at', h.expires_at)
                          FROM berth_holds h JOIN yachts hy ON hy.id = h.yacht_id
                         WHERE h.berth_id = b.id AND h.status = 'active'
                           AND daterange(h.arrive, h.depart) && daterange(:a, :d) LIMIT 1) AS hold,
@@ -114,7 +144,7 @@ def availability(marina_id: str, yacht_id: str, arrive: date, depart: date, db: 
     nights = (depart - arrive).days
     out = []
     for r in rows:
-        f = fit(y, r)
+        f = fit(sz, r)
         hold, booking = r["hold"], r["booking"]
         if r["status"] == "maintenance":
             state = "maintenance"
@@ -140,8 +170,7 @@ def availability(marina_id: str, yacht_id: str, arrive: date, depart: date, db: 
     if free:
         best = min(free, key=lambda b: (b["fit"]["spare_loa_m"], b["rate_usd_day"]))
         best["best_fit"] = True
-    return {"yacht": {"id": y["id"], "name": y["name"], "loa_m": float(y["loa_m"]), "beam_m": float(y["beam_m"]),
-                      "draft_m": float(y["draft_m"]) if y["draft_m"] is not None else None},
+    return {"yacht": {"id": y["id"], "name": y["name"], **_size_out(y, sz)},
             "nights": nights, "hold_minutes": get_settings().berth_hold_minutes, "berths": out,
             "server_time": datetime.now(timezone.utc)}
 
@@ -153,6 +182,10 @@ class HoldIn(BaseModel):
     yacht_id: str
     arrive: date
     depart: date
+    # the size to book with; leave out to use the registered size
+    loa_m: float | None = Field(default=None, gt=0, le=200)
+    beam_m: float | None = Field(default=None, gt=0, le=60)
+    draft_m: float | None = Field(default=None, gt=0, le=40)
 
 
 @router.post("/berths/{berth_id}/hold", status_code=201)
@@ -160,13 +193,14 @@ def hold(berth_id: int, body: HoldIn, db: Session = Depends(get_db), user: User 
     _dates(body.arrive, body.depart)
     _require_yacht_role(db, user, body.yacht_id)
     y = _yacht(db, body.yacht_id)
+    sz = booked_size(y, body.loa_m, body.beam_m, body.draft_m)
     # Lock the berth row: concurrent holds on the same berth queue up here, one at a time.
     b = db.execute(text("SELECT * FROM berths WHERE id=:i FOR UPDATE"), {"i": berth_id}).mappings().first()
     if b is None:
         raise HTTPException(404, "Berth not found")
     if b["status"] == "maintenance":
         raise HTTPException(409, f"Berth {b['code']} is closed for maintenance")
-    f = fit(y, b)
+    f = fit(sz, b)
     if not f["ok"]:
         raise HTTPException(422, f"{y['name']} does not fit berth {b['code']}: " + "; ".join(f["reasons"]))
     expire_holds(db)
@@ -196,17 +230,19 @@ def hold(berth_id: int, body: HoldIn, db: Session = Depends(get_db), user: User 
     expires = datetime.now(timezone.utc) + timedelta(minutes=get_settings().berth_hold_minutes)
     try:
         hid = db.execute(
-            text("""INSERT INTO berth_holds (berth_id, yacht_id, user_id, arrive, depart, expires_at)
-                    VALUES (:b, :y, :u, :a, :d, :e) RETURNING id"""),
-            {"b": berth_id, "y": body.yacht_id, "u": user.id, "a": body.arrive, "d": body.depart, "e": expires},
+            text("""INSERT INTO berth_holds (berth_id, yacht_id, user_id, arrive, depart, expires_at, loa_m, beam_m, draft_m)
+                    VALUES (:b, :y, :u, :a, :d, :e, :l, :w, :dr) RETURNING id"""),
+            {"b": berth_id, "y": body.yacht_id, "u": user.id, "a": body.arrive, "d": body.depart, "e": expires,
+             "l": sz["loa_m"], "w": sz["beam_m"], "dr": sz["draft_m"]},
         ).scalar_one()
         record_event(db, body.yacht_id, "BERTH_HOLD", marina_id=b["marina_id"], berth_code=b["code"],
-                     payload={"hold": hid, "arrive": str(body.arrive), "depart": str(body.depart)})
+                     payload={"hold": hid, "arrive": str(body.arrive), "depart": str(body.depart),
+                              "size": {k: (float(sz[k]) if sz[k] is not None else None) for k in ("loa_m", "beam_m", "draft_m")}})
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(409, f"Another yacht took berth {b['code']} a moment ago. Pick another berth.")
-    return {"hold_id": hid, "berth": b["code"], "expires_at": expires, "fit": f,
+    return {"hold_id": hid, "berth": b["code"], "expires_at": expires, "fit": f, "size": _size_out(y, sz),
             "stay_total_usd": float(b["rate_usd_day"]) * (body.depart - body.arrive).days}
 
 
@@ -243,9 +279,10 @@ def confirm_hold(hold_id: int, body: ConfirmIn, db: Session = Depends(get_db), u
         # Release the hold first so the booking can take its place under the same no-overlap rule.
         db.execute(text("UPDATE berth_holds SET status='booked', booking_ref=NULL WHERE id=:i"), {"i": hold_id})
         db.execute(
-            text("""INSERT INTO bookings (ref,kind,yacht_id,marina_id,berth_id,arrive,depart,amount_usd)
-                    VALUES (:r,'berth',:y,:m,:b,:a,:d,:amt)"""),
-            dict(r=body.ref, y=h["yacht_id"], m=b["marina_id"], b=b["id"], a=h["arrive"], d=h["depart"], amt=amount),
+            text("""INSERT INTO bookings (ref,kind,yacht_id,marina_id,berth_id,arrive,depart,amount_usd,loa_m,beam_m,draft_m)
+                    VALUES (:r,'berth',:y,:m,:b,:a,:d,:amt,:l,:w,:dr)"""),
+            dict(r=body.ref, y=h["yacht_id"], m=b["marina_id"], b=b["id"], a=h["arrive"], d=h["depart"], amt=amount,
+                 l=h["loa_m"], w=h["beam_m"], dr=h["draft_m"]),
         )
         db.execute(text("UPDATE berth_holds SET booking_ref=:r WHERE id=:i"), {"r": body.ref, "i": hold_id})
         record_event(db, h["yacht_id"], "BERTH_RESERVE", marina_id=b["marina_id"], berth_code=b["code"], document_hash=body.ref)
@@ -271,8 +308,9 @@ def berth_board(marina_id: str, day: date | None = None, db: Session = Depends(g
         text(
             """SELECT b.id, b.code, b.max_loa_m, b.max_beam_m, b.max_draft_m, b.rate_usd_day, b.status,
                       k.ref, k.status AS booking_status, k.arrive, k.depart, k.yacht_id AS b_yacht,
-                      by_.name AS b_name, by_.loa_m AS b_loa, by_.beam_m AS b_beam, by_.draft_m AS b_draft,
-                      h.id AS hold_id, h.expires_at, h.yacht_id AS h_yacht, hy.name AS h_name, hy.loa_m AS h_loa
+                      by_.name AS b_name, COALESCE(k.loa_m, by_.loa_m) AS b_loa, COALESCE(k.beam_m, by_.beam_m) AS b_beam,
+                      COALESCE(k.draft_m, by_.draft_m) AS b_draft,
+                      h.id AS hold_id, h.expires_at, h.yacht_id AS h_yacht, hy.name AS h_name, COALESCE(h.loa_m, hy.loa_m) AS h_loa
                FROM berths b
                LEFT JOIN LATERAL (SELECT * FROM bookings k WHERE k.berth_id=b.id AND k.status NOT IN ('cancelled','refunded')
                                    AND :day >= k.arrive AND :day < k.depart ORDER BY k.arrive LIMIT 1) k ON TRUE
