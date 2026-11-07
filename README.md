@@ -236,6 +236,13 @@ chosen yacht, with the yacht's outline in the selected berth.
 API: `GET /berths/availability`, `POST /berths/{id}/hold`, `DELETE /berths/holds/{id}`,
 `POST /berths/holds/{id}/confirm`, `GET /admin/berths/board`.
 
+**Booking with a size.** On Find a berth the client enters the yacht's length overall, beam and draft
+as it will lie in the berth, with any bowsprit, swim platform, davits or tender. The fields are prefilled
+with the registered size. The entered size decides which berths fit, is kept on the hold and the booking,
+and is what the marina board and the autopilot check against. It can never be smaller than the yacht's
+registered (verified) size. The satellite hull-length check at arrival still uses the registered hull.
+API: `loa_m`, `beam_m` and `draft_m` on `GET /berths/availability` and `POST /berths/{id}/hold` (migration 011).
+
 ### 3D marina and berth plans
 
 Find a berth and the admin berth board both have a **3D marina** view (three.js, `web/lib/marina3d.js`):

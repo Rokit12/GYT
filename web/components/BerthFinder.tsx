@@ -21,7 +21,8 @@ type Berth = {
   stay_total_usd: number; services: string; fit: Fit; best_fit?: boolean; hold_id: number | null; held_by: string | null; held_until: string | null;
   state: "available" | "too_small" | "held" | "held_by_you" | "booked" | "booked_by_you" | "maintenance";
 };
-type Avail = { yacht: { id: string; name: string; loa_m: number; beam_m: number; draft_m: number | null }; nights: number; hold_minutes: number; berths: Berth[] };
+type Size = { loa_m: number; beam_m: number; draft_m: number | null };
+type Avail = { yacht: { id: string; name: string; custom?: boolean; registered?: Size } & Size; nights: number; hold_minutes: number; berths: Berth[] };
 type Mine = { id: string; name: string; role: string };
 type Marina = { id: string; name: string; region: string };
 
@@ -42,8 +43,12 @@ export default function BerthFinder() {
   const [q, setQ] = useState(() => {
     const t = new Date(); t.setDate(t.getDate() + 14);
     const d = new Date(t); d.setDate(d.getDate() + 3);
-    return { yacht: "", marina: "MARINA-DXB-001", arrive: iso(t), depart: iso(d) };
+    return { yacht: "", marina: "MARINA-DXB-001", arrive: iso(t), depart: iso(d), loa: "", beam: "", draft: "" };
   });
+  // the size to book with, as typed; it applies when the field is left or the form is sent
+  const [dims, setDims] = useState({ loa: "", beam: "", draft: "" });
+  const applyDims = () => setQ((x) => (x.loa === dims.loa && x.beam === dims.beam && x.draft === dims.draft ? x : { ...x, ...dims }));
+  const sizeParams = () => Object.fromEntries(([["loa_m", q.loa], ["beam_m", q.beam], ["draft_m", q.draft]] as const).filter(([, v]) => v !== "").map(([k, v]) => [k, v]));
   const [data, setData] = useState<Avail | null>(null);
   const [sel, setSel] = useState<number | null>(null);
   const [err, setErr] = useState("");
@@ -69,7 +74,7 @@ export default function BerthFinder() {
   const load = useCallback(async (quiet = false) => {
     if (!q.yacht || !q.marina || q.depart <= q.arrive) return;
     try {
-      const d = await call<Avail>(`/berths/availability?${new URLSearchParams({ marina_id: q.marina, yacht_id: q.yacht, arrive: q.arrive, depart: q.depart })}`);
+      const d = await call<Avail>(`/berths/availability?${new URLSearchParams({ marina_id: q.marina, yacht_id: q.yacht, arrive: q.arrive, depart: q.depart, ...sizeParams() })}`);
       // tell the owner when a berth they were looking at is taken by someone else
       if (quiet) {
         for (const b of d.berths) {
@@ -83,13 +88,20 @@ export default function BerthFinder() {
       prev.current = new Map(d.berths.map((b) => [b.id, b.state]));
       setData(d);
       setErr("");
-      setSel((s) => s ?? d.berths.find((b) => b.state === "held_by_you")?.id ?? d.berths.find((b) => b.best_fit)?.id ?? null);
+      setSel((s) => {
+        const cur = d.berths.find((b) => b.id === s);
+        if (cur && !(cur.state === "too_small" && !quiet)) return s;
+        return d.berths.find((b) => b.state === "held_by_you")?.id ?? d.berths.find((b) => b.best_fit)?.id ?? null;
+      });
     } catch (e) {
       setErr((e as Error).message);
     }
   }, [q]);
 
-  useEffect(() => { setData(null); setSel(null); prev.current = new Map(); load(); }, [load]);
+  // a new yacht, marina or dates starts afresh; a new size only re-checks fit, keeping the view
+  const scope = `${q.yacht}|${q.marina}|${q.arrive}|${q.depart}`;
+  useEffect(() => { setData(null); setSel(null); prev.current = new Map(); }, [scope]);
+  useEffect(() => { load(); }, [load]);
   useEffect(() => {
     const t = setInterval(() => { if (document.visibilityState === "visible") load(true); }, 3000);
     return () => clearInterval(t);
@@ -101,7 +113,8 @@ export default function BerthFinder() {
     if (!data) return;
     setBusy(true); setNote(null);
     try {
-      await call(`/berths/${b.id}/hold`, { method: "POST", body: JSON.stringify({ yacht_id: data.yacht.id, arrive: q.arrive, depart: q.depart }) });
+      const sz = Object.fromEntries(Object.entries(sizeParams()).map(([k, v]) => [k, Number(v)]));
+      await call(`/berths/${b.id}/hold`, { method: "POST", body: JSON.stringify({ yacht_id: data.yacht.id, arrive: q.arrive, depart: q.depart, ...sz }) });
       setNote({ ok: true, t: `Berth ${b.code} is held for ${data.yacht.name} for ${data.hold_minutes} minutes. Other yachts now see it as taken.` });
     } catch (e) {
       setNote({ ok: false, t: (e as Error).message });
@@ -173,13 +186,31 @@ export default function BerthFinder() {
 
   return (
     <div className="bf">
-      <form className="panel bf-q" onSubmit={(e) => { e.preventDefault(); load(); }}>
-        <label className="f">Yacht<select value={q.yacht} onChange={(e) => setQ({ ...q, yacht: e.target.value })}>
+      <form className="panel bf-q" onSubmit={(e) => { e.preventDefault(); applyDims(); load(); }}>
+        <label className="f">Yacht<select value={q.yacht} onChange={(e) => { setDims({ loa: "", beam: "", draft: "" }); setQ({ ...q, yacht: e.target.value, loa: "", beam: "", draft: "" }); }}>
           {mine.map((y) => <option key={y.id} value={y.id}>{y.name}</option>)}</select></label>
         <label className="f">Marina<select value={q.marina} onChange={(e) => setQ({ ...q, marina: e.target.value })}>
           {marinas.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
         <label className="f">Arrive<input type="date" value={q.arrive} onChange={(e) => setQ({ ...q, arrive: e.target.value })} /></label>
         <label className="f">Depart<input type="date" value={q.depart} min={q.arrive} onChange={(e) => setQ({ ...q, depart: e.target.value })} /></label>
+        <fieldset className="bf-size">
+          <legend>Your yacht&apos;s size for this booking</legend>
+          {([["loa", "Length overall", "loa_m", 200], ["beam", "Beam", "beam_m", 60], ["draft", "Draft", "draft_m", 40]] as const).map(([k, label, key, hi]) => {
+            const reg = data?.yacht.registered?.[key] ?? null;
+            return (
+              <label key={k} className="f">{label} (m)
+                <input type="number" inputMode="decimal" step="0.1" min={reg ?? 0.1} max={hi} value={dims[k]}
+                  placeholder={reg != null ? String(reg) : k === "draft" ? "not registered" : ""}
+                  onChange={(e) => setDims({ ...dims, [k]: e.target.value })} onBlur={applyDims} />
+              </label>
+            );
+          })}
+          <p className="small muted">
+            Enter the yacht as it will lie in the berth, with any bowsprit, swim platform, davits or tender. It can&apos;t be smaller
+            than the registered size{data?.yacht.registered ? ` (${data.yacht.registered.loa_m} m × ${data.yacht.registered.beam_m} m${data.yacht.registered.draft_m ? `, draft ${data.yacht.registered.draft_m} m` : ""})` : ""}.
+            {(q.loa || q.beam || q.draft) && <> <button type="button" className="linklike" onClick={() => { setDims({ loa: "", beam: "", draft: "" }); setQ((x) => ({ ...x, loa: "", beam: "", draft: "" })); }}>Use the registered size</button></>}
+          </p>
+        </fieldset>
         <span className="bf-live small"><span className="livedot" aria-hidden="true" /> Live: updates every 3 s</span>
       </form>
 
@@ -196,7 +227,7 @@ export default function BerthFinder() {
       {data && drawing && (
         <>
           <div className="panel">
-            <header><h3>{data.yacht.name}: {data.yacht.loa_m} m × {data.yacht.beam_m} m{data.yacht.draft_m ? `, draft ${data.yacht.draft_m} m` : ""}</h3>
+            <header><h3>{data.yacht.name}: {data.yacht.loa_m} m × {data.yacht.beam_m} m{data.yacht.draft_m ? `, draft ${data.yacht.draft_m} m` : ""}{data.yacht.custom && <span className="pill info" style={{ marginLeft: 8, verticalAlign: "middle" }}>size for this booking</span>}</h3>
               <span className="legend bf-legend small"><span><i className="swc swc-free" />Fits</span><span><i className="swc swc-best" />Best fit</span><span><i className="swc swc-held" />Held by another yacht</span><span><i className="swc swc-mine" />Yours</span><span><i className="swc swc-small" />Too small</span><span><i className="swc swc-booked" />Booked</span></span></header>
             <div className="seg bf-view" role="group" aria-label="Berth view">
               <button type="button" aria-pressed={view === "3d"} onClick={() => pickView("3d")}>3D marina</button>

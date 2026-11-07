@@ -1164,6 +1164,12 @@ tr.avail-row td { color: var(--muted); font-style: italic; }
     <label class="f" for="bfMarina">Marina<select id="bfMarina"></select></label>
     <label class="f" for="bfArr">Arrive<input type="date" id="bfArr"></label>
     <label class="f" for="bfDep">Depart<input type="date" id="bfDep"></label>
+    <fieldset class="bf-size"><legend>Your yacht&rsquo;s size for this booking</legend>
+      <label class="f" for="bfLoa">Length overall (m)<input type="number" inputmode="decimal" step="0.1" id="bfLoa"></label>
+      <label class="f" for="bfBeam">Beam (m)<input type="number" inputmode="decimal" step="0.1" id="bfBeam"></label>
+      <label class="f" for="bfDraft">Draft (m)<input type="number" inputmode="decimal" step="0.1" id="bfDraft"></label>
+      <p class="small muted"><span id="bfSizeNote"></span> <button type="button" class="linklike" id="bfSizeReset" hidden>Use the registered size</button></p>
+    </fieldset>
     <span class="bf-live small"><span class="livedot2" aria-hidden="true"></span> Live: other yachts are searching too</span>
   </form>
   <p class="banner" id="bfNote" hidden role="status"></p>
@@ -3566,6 +3572,8 @@ const key=b=>b.marina+'|'+b.berth;
 const ST={holds:[],booked:{},seq:1};// holds: {id,k,yid|null,loa,label,exp,mine}
 // what is already in the marina (sample): occupied and booked berths, including one booking that no longer fits
 const yb=id=>YACHTS.find(y=>y.id===id);
+// a booking's yacht at the size it was booked with (bowsprit, swim platform, tender...), else its registered size
+const bkY=bk=>({...yb(bk.yid),...(bk.size||{})});
 ST.booked[DXB+'|B128']={yid:'YACHT-000001',ref:'BK-4099',status:'occupied'};
 ST.booked[DXB+'|A040']={yid:'YACHT-000007',ref:'BK-4102',status:'booked'};
 ST.booked[DXB+'|A044']={yid:'YACHT-000004',ref:'BK-4105',status:'booked'};// 55 m yacht in a 50 m berth: the autopilot catches it
@@ -3585,7 +3593,7 @@ function myYachts(){const u=me();const OWN=store.get('gyt-owned',{});const own=m
 function initQ(){if(Q)return;const t=new Date(Date.now()+14*864e5);Q={yid:'YACHT-000003',marina:DXB,arr:iso(t),dep:iso(+t+3*864e5)};
   $('#bfMarina').innerHTML=[...new Set(BERTHS.map(b=>b.marina))].map(m=>`<option value="${m}">${esc(M[m].name)}</option>`).join('');
   $('#bbMarina').innerHTML=$('#bfMarina').innerHTML}
-function view(){const y=yb(Q.yid);const nights=Math.max(1,Math.round((new Date(Q.dep)-new Date(Q.arr))/864e5));
+function view(){const y0=yb(Q.yid);const y={...y0,loa:Q.loa||y0.loa,beam:Q.beam||y0.beam,draft:Q.draft||y0.draft,reg:y0,custom:!!(Q.loa||Q.beam||Q.draft)};const nights=Math.max(1,Math.round((new Date(Q.dep)-new Date(Q.arr))/864e5));
   const list=BERTHS.filter(b=>b.marina===Q.marina).sort((a,b)=>a.loa-b.loa||a.berth.localeCompare(b.berth)).map(b=>{const k=key(b),f=fit(y,b),h=activeHold(k),bk=ST.booked[k];
     let state=bk?(bk.yid===y.id?'booked_by_you':'booked'):h?(h.mine&&h.yid===y.id?'held_by_you':'held'):!f.ok?'too_small':'available';return{b,k,f,h,bk,state,total:b.rate*nights}});
   const free=list.filter(x=>x.state==='available');if(free.length){const best=free.reduce((a,c)=>c.f.spare<a.f.spare||(c.f.spare===a.f.spare&&c.b.rate<a.b.rate)?c:a);best.best=true}
@@ -3599,7 +3607,9 @@ window.renderBerths=function(force){if($('#v-berths').hidden)return;initQ();
   V.list.forEach(x=>{const was=prevStates[x.k];if(was==='available'&&x.state==='held'&&!x.h.mine){note(false,`Berth ${x.b.berth} was just taken by another yacht (${x.h.loa} m). The autopilot moved your pick to the next best fit.`);if(selB===x.k)selB=null}prevStates[x.k]=x.state});
   const sig=JSON.stringify([Q,selB,V.list.map(x=>[x.k,x.state,x.best])]);if(sig===lastSig&&!force){tick();return}lastSig=sig;
   if(selB==null||!V.list.some(x=>x.k===selB)){const d=V.list.find(x=>x.state==='held_by_you')||V.list.find(x=>x.best);selB=d?d.k:null}
-  $('#bfTitle').textContent=`${V.y.name}: ${V.y.loa} m × ${V.y.beam} m, draft ${V.y.draft} m`;
+  $('#bfTitle').textContent=`${V.y.name}: ${V.y.loa} m × ${V.y.beam} m, draft ${V.y.draft} m${V.y.custom?' · size for this booking':''}`;
+  [['bfLoa','loa'],['bfBeam','beam'],['bfDraft','draft']].forEach(([id,k])=>{const el=$('#'+id);el.placeholder=V.y.reg[k];el.min=V.y.reg[k];if(document.activeElement!==el)el.value=Q[k]||''});
+  $('#bfSizeNote').textContent=`Enter the yacht as it will lie in the berth, with any bowsprit, swim platform, davits or tender. It can't be smaller than the registered size (${V.y.reg.loa} m × ${V.y.reg.beam} m, draft ${V.y.reg.draft} m).`;$('#bfSizeReset').hidden=!V.y.custom;
   const best=V.list.find(x=>x.best);
   $('#bfPick').hidden=!best;if(best)$('#bfPick').innerHTML=`<span class="ap-badge">Autopilot pick</span><div><b>Berth ${best.b.berth}</b> is the best fit for ${esc(V.y.name)}: ${best.f.spare} m to spare, ${full$(best.b.rate)}/day.<div class="small muted">The smallest free berth your yacht fits, so the big berths stay free for big yachts. Length, beam and draft all checked.</div></div>`;
   // pontoon drawing to scale
@@ -3609,7 +3619,7 @@ window.renderBerths=function(force){if($('#v-berths').hidden)return;initQ();
    ${slips.map(({it,x,w,h})=>{const cls=it.state==='available'?(it.best?'best':'free'):it.state.endsWith('you')?'mine':it.state==='too_small'?'small':it.state==='held'?'held':'booked';const on=selB===it.k;const yw=Math.min(w-6,V.y.beam*7);
      return `<g class="slip ${cls} ${on?'on':''}" data-bk="${it.k}" tabindex="0" role="button" aria-label="Berth ${it.b.berth}, ${LABEL[it.state]}"><rect x="${x}" y="${TOP}" width="${w}" height="${h}" rx="3" class="sl-box"/>
       ${on?`<path class="ghost ${it.f.ok?'':'bad'}" d="M${x+w/2} ${TOP+4} l${yw/2} ${yl*.18} v${yl*.72} q0 ${yl*.1} -${yw/2} ${yl*.1} q-${yw/2} 0 -${yw/2} -${yl*.1} v-${yl*.72} z"/>`:''}
-      ${it.bk&&!on?`<path class="moored" d="M${x+w/2} ${TOP+4} l${Math.min(w-8,yb(it.bk.yid).beam*7)/2} ${yb(it.bk.yid).loa*K*.18} v${yb(it.bk.yid).loa*K*.72} q0 ${yb(it.bk.yid).loa*K*.1} -${Math.min(w-8,yb(it.bk.yid).beam*7)/2} ${yb(it.bk.yid).loa*K*.1} q-${Math.min(w-8,yb(it.bk.yid).beam*7)/2} 0 -${Math.min(w-8,yb(it.bk.yid).beam*7)/2} -${yb(it.bk.yid).loa*K*.1} v-${yb(it.bk.yid).loa*K*.72} z"/>`:''}
+      ${it.bk&&!on?`<path class="moored" d="M${x+w/2} ${TOP+4} l${Math.min(w-8,bkY(it.bk).beam*7)/2} ${bkY(it.bk).loa*K*.18} v${bkY(it.bk).loa*K*.72} q0 ${bkY(it.bk).loa*K*.1} -${Math.min(w-8,bkY(it.bk).beam*7)/2} ${bkY(it.bk).loa*K*.1} q-${Math.min(w-8,bkY(it.bk).beam*7)/2} 0 -${Math.min(w-8,bkY(it.bk).beam*7)/2} -${bkY(it.bk).loa*K*.1} v-${bkY(it.bk).loa*K*.72} z"/>`:''}
       <text x="${x+w/2}" y="${TOP+h+14}" class="sl-code">${it.b.berth}</text><text x="${x+w/2}" y="${TOP+h+27}" class="sl-size">${it.b.loa} m</text>
       ${it.best?`<text x="${x+w/2}" y="${TOP-4}" class="sl-star">★</text>`:''}${it.h?`<text x="${x+w/2}" y="${TOP+16}" class="sl-clock" data-exp="${it.h.exp}">${left(it.h.exp)}</text>`:''}</g>`}).join('')}</svg>`;
   $('#bfGrid').innerHTML=V.list.map(it=>`<button type="button" class="bcard s-${it.state} ${it.best?'best':''} ${selB===it.k?'on':''}" data-bk="${it.k}"><span class="row" style="justify-content:space-between"><b>Berth ${it.b.berth}</b><span class="pill ${it.state==='available'?'ok':it.state==='held'||it.state==='too_small'?'warn':it.state.endsWith('you')?'info':''}">${it.best?'★ Best fit':LABEL[it.state]}</span></span>
@@ -3633,12 +3643,19 @@ document.addEventListener('click',async e=>{const s=e.target.closest('#v-berths 
     ST.holds.push({id:ST.seq++,k:c.k,yid:V.y.id,loa:V.y.loa,mine:true,exp:Date.now()+HOLD_MIN*60e3});await emit(V.y,'BERTH_HOLD',{marina:c.b.marina,berth:c.b.berth,doc:'hold-'+Date.now()});
     note(true,`Berth ${c.b.berth} is held for ${V.y.name} for ${HOLD_MIN} minutes. Every other yacht now sees it as taken.`)}
   if(a.dataset.bfa==='release'){ST.holds=ST.holds.filter(h=>h!==c.h);note(true,`Released berth ${c.b.berth}.`)}
-  if(a.dataset.bfa==='confirm'){const ref='BK-'+(4200+bookings.length);ST.holds=ST.holds.filter(h=>h!==c.h);ST.booked[c.k]={yid:V.y.id,ref,status:'booked'};
+  if(a.dataset.bfa==='confirm'){const ref='BK-'+(4200+bookings.length);ST.holds=ST.holds.filter(h=>h!==c.h);ST.booked[c.k]={yid:V.y.id,ref,status:'booked',...(V.y.custom?{size:{loa:V.y.loa,beam:V.y.beam,draft:V.y.draft}}:{})};
     bookings.unshift({ref,y:V.y.name,m:M[c.b.marina].name,berth:c.b.berth,dates:Q.arr+' → '+Q.dep,v:c.total,st:'Deposit in escrow'});
     await emit(V.y,'BERTH_RESERVE',{marina:c.b.marina,berth:c.b.berth,doc:ref});addEscrow({ref,kind:'Berth',y:V.y,marina:c.b.marina,berth:c.b.berth,amount:c.total,dates:Q.arr+' → '+Q.dep});renderBookings();window.gyt3dDock&&gyt3dDock(c.b.berth);
     note(true,`Booked: berth ${c.b.berth}, ${ref}. ${full$(c.total)} waits in escrow and is released to the marina only when ${V.y.name}'s arrival is proven.`)}
   lastSig='';renderBerths()});
-['bfYacht','bfMarina','bfArr','bfDep'].forEach(id=>$('#'+id).addEventListener('change',()=>{Q={yid:$('#bfYacht').value,marina:$('#bfMarina').value,arr:$('#bfArr').value,dep:$('#bfDep').value};selB=null;prevStates={};lastSig='';renderBerths()}));
+['bfYacht','bfMarina','bfArr','bfDep'].forEach(id=>$('#'+id).addEventListener('change',()=>{const same=Q&&Q.yid===$('#bfYacht').value;Q={yid:$('#bfYacht').value,marina:$('#bfMarina').value,arr:$('#bfArr').value,dep:$('#bfDep').value,...(same?{loa:Q.loa,beam:Q.beam,draft:Q.draft}:{})};selB=null;prevStates={};lastSig='';renderBerths()}));
+// the size to book with: applies when the field is left or Enter is pressed; never below the registered size
+[['bfLoa','loa','length overall'],['bfBeam','beam','beam'],['bfDraft','draft','draft']].forEach(([id,k,label])=>$('#'+id).addEventListener('change',e=>{
+  const reg=yb(Q.yid)[k],raw=e.target.value.trim(),v=raw===''?null:Math.round(parseFloat(raw)*100)/100;
+  if(v!=null&&(!(v>0)||v>(k==='loa'?200:k==='beam'?60:40))){note(false,`Enter a ${label} in metres.`);e.target.value=Q[k]||'';return}
+  if(v!=null&&v<reg){note(false,`The ${label} can't be less than ${yb(Q.yid).name}'s registered ${reg} m.`);e.target.value=Q[k]||'';return}
+  Q[k]=v&&v!==reg?v:null;const c=selB&&view().list.find(x=>x.k===selB);if(c&&c.state==='too_small')selB=null;lastSig='';renderBerths()}));
+$('#bfSizeReset').addEventListener('click',()=>{Q.loa=Q.beam=Q.draft=null;lastSig='';renderBerths()});
 // other yachts are searching too (demo): every so often one holds a free berth that fits it
 const BOT=[16,19,22,26,29,33,38,44];
 window.gytBot=function(code,loa,marina=DXB){const b=BERTHS.find(x=>x.marina===marina&&x.berth===code);if(!b)return;const k=key(b);if(activeHold(k)||ST.booked[k])return;ST.holds.push({id:ST.seq++,k,yid:null,loa,mine:false,exp:Date.now()+HOLD_MIN*60e3});lastSig='';renderBerths();renderBoard()};
@@ -3650,7 +3667,7 @@ setInterval(()=>{if(!$('#v-berths').hidden)renderBerths();else tick();if(!$('#v-
 /* ---- admin: berth board ---- */
 let bbSig='';
 window.renderBoard=function(){if($('#v-bboard').hidden)return;initQ();const m=$('#bbMarina').value||DXB;const day=Date.now();
-  const rows=BERTHS.filter(b=>b.marina===m).sort((a,b)=>a.berth.localeCompare(b.berth)).map(b=>{const k=key(b),bk=ST.booked[k],h=activeHold(k);const y=bk&&yb(bk.yid);const f=y?fit(y,b):null;
+  const rows=BERTHS.filter(b=>b.marina===m).sort((a,b)=>a.berth.localeCompare(b.berth)).map(b=>{const k=key(b),bk=ST.booked[k],h=activeHold(k);const y=bk&&bkY(bk);const f=y?fit(y,b):null;
     const issues=[];if(f&&!f.ok)issues.push('Booked yacht does not fit: '+f.reasons.join('; '));else if(f&&f.snug)issues.push(`Snug fit: ${f.spare} m spare length`);
     return{b,k,bk,h,y,issues,state:bk?(bk.status==='occupied'?'occupied':'booked'):h?'held':'free',use:y?Math.round(100*y.loa/b.loa):null}});
   const c=s=>rows.filter(r=>r.state===s).length;
@@ -3689,7 +3706,7 @@ $('#apRun').addEventListener('click',async()=>{const b=$('#apRun');b.disabled=tr
   // 1 holds
   const exp=ST.holds.filter(h=>!h.mine);if(exp.length){exp[0].exp=Date.now()-1;activeHold(exp[0].k)}else APL('holds','done','No berth holds ran out. Every hold is live and counting down.');await sleep2(500);
   // 2 berth fit
-  for(const [k,bk] of Object.entries(ST.booked)){const b=BERTHS.find(x=>key(x)===k),y=yb(bk.yid),f=fit(y,b);if(!f.ok&&!APLOG.some(l=>l.job==='berth_fit'&&l.summary.includes(y.name)&&!l.resolved))APL('berth_fit','flagged',`${y.name} does not fit berth ${b.berth} at ${M[b.marina].name.split(',')[0]}: ${f.reasons.join('; ')}. Suggest berth ${(BERTHS.filter(x=>x.marina===b.marina&&fit(y,x).ok&&!ST.booked[key(x)]).sort((a,c)=>a.loa-c.loa)[0]||{berth:'—'}).berth}.`)}
+  for(const [k,bk] of Object.entries(ST.booked)){const b=BERTHS.find(x=>key(x)===k),y=bkY(bk),f=fit(y,b);if(!f.ok&&!APLOG.some(l=>l.job==='berth_fit'&&l.summary.includes(y.name)&&!l.resolved))APL('berth_fit','flagged',`${y.name} does not fit berth ${b.berth} at ${M[b.marina].name.split(',')[0]}: ${f.reasons.join('; ')}. Suggest berth ${(BERTHS.filter(x=>x.marina===b.marina&&fit(y,x).ok&&!ST.booked[key(x)]).sort((a,c)=>a.loa-c.loa)[0]||{berth:'—'}).berth}.`)}
   await sleep2(500);
   // 3 arrivals
   APL('arrivals','done','Arrival of Yas Falcon at berth A040 proven by signed GPS and AIS within 40 m; escrow is ready for release.');await sleep2(500);
@@ -4682,7 +4699,7 @@ const PLANS={};window.gytPlans=PLANS;
 // put berths where the marina's imported plan shows them
 function withPlan(sc,mid){const P=PLANS[mid];if(!sc||!P)return sc;sc.plan={image:P.image,width:P.width,height:P.height};sc.berths.forEach(b=>{const a=P.at[b.code];if(a)b.at=a});return sc}
 function berthScene(){const S=gytBerthState();if(!S.V)return null;const V=S.V;
-  return withPlan({berths:V.list.map(it=>{const st=it.state;const by=it.bk&&S.yb(it.bk.yid);
+  return withPlan({berths:V.list.map(it=>{const st=it.state;const by=it.bk&&{...S.yb(it.bk.yid),...(it.bk.size||{})};
     return{code:it.b.berth,loa:it.b.loa,beam:it.b.beam,depth:it.b.depth,state:st,best:!!it.best,
       moored:by&&st!=='booked_by_you'?{loa:by.loa,beam:by.beam,name:by.name,misfit:!S.fit(by,it.b).ok}:(st==='booked_by_you'&&it.k!==S.selB?{loa:V.y.loa,beam:V.y.beam,name:V.y.name}:null),
       held:st==='held'&&it.h?{loa:it.h.loa}:null}}),
@@ -4699,12 +4716,12 @@ setBfView(bfView);
 let lastA='';
 function boardScene(){const S=gytBerthState();const mar=$('#bbMarina').value||S.DXB;
   const rows=BERTHS.filter(b=>b.marina===mar).sort((a,b)=>a.loa-b.loa||a.berth.localeCompare(b.berth));
-  return withPlan({berths:rows.map(b=>{const k=S.key(b),bk=S.ST.booked[k],h=S.activeHold(k),y=bk&&S.yb(bk.yid);
+  return withPlan({berths:rows.map(b=>{const k=S.key(b),bk=S.ST.booked[k],h=S.activeHold(k),y=bk&&{...S.yb(bk.yid),...(bk.size||{})};
     return{code:b.berth,loa:b.loa,beam:b.beam,depth:b.depth,state:bk?(bk.status==='occupied'?'occupied':'booked'):h?'held':'available',
       moored:y?{loa:y.loa,beam:y.beam,name:y.name,misfit:!S.fit(y,b).ok}:null,held:h?{loa:h.loa}:null}}),yacht:null,selected:null},mar)}
 function sync3dBoard(){if($('#v-bboard').hidden||bbView!=='3d')return;const sc=boardScene();const sig=JSON.stringify(sc);if(sig===lastA&&m3a)return;
   when3D(()=>{if(!m3a)m3a=mk($('#bb3d'),code=>{bbPick=code;info()});lastA=sig;m3a.set(sc);info()})}
-function info(){if(!bbPick)return;const S=gytBerthState();const mar=$('#bbMarina').value||S.DXB;const b=BERTHS.find(x=>x.marina===mar&&x.berth===bbPick);if(!b)return;const k=S.key(b),bk=S.ST.booked[k],h=S.activeHold(k),y=bk&&S.yb(bk.yid);const f=y&&S.fit(y,b);
+function info(){if(!bbPick)return;const S=gytBerthState();const mar=$('#bbMarina').value||S.DXB;const b=BERTHS.find(x=>x.marina===mar&&x.berth===bbPick);if(!b)return;const k=S.key(b),bk=S.ST.booked[k],h=S.activeHold(k),y=bk&&{...S.yb(bk.yid),...(bk.size||{})};const f=y&&S.fit(y,b);
   $('#bb3dInfo').innerHTML=`Berth <b>${esc(b.berth)}</b> (${b.loa} m × ${b.beam} m, ${b.depth} m deep): `+(y?`${esc(y.name)}, ${y.loa} m, ${bk.status}${f&&!f.ok?` · <span class="crit-t">does not fit: ${esc(f.reasons.join('; '))}</span>`:''}`:h?'held by another yacht ('+h.loa+' m)':'free')}
 $('#bbViewSeg').addEventListener('click',e=>{const b=e.target.closest('[data-bbv]');if(!b)return;bbView=b.dataset.bbv;$('#bb3dWrap').hidden=bbView!=='3d';$('#bbGrid').hidden=bbView==='3d';$('#bbViewSeg').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.bbv===bbView)));lastA='';sync3dBoard()});
 const _rbd=window.renderBoard;window.renderBoard=function(){_rbd();sync3dBoard()};
@@ -4765,5 +4782,12 @@ input,select,textarea{max-width:100%}
 }
 @media (pointer:coarse){button,.btn,select{min-height:40px}.seg button{min-height:36px}}
 
+</style>
+<style>
+.bf-size{grid-column:1/-1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;min-width:0}
+.bf-size legend{padding:0 4px;font-size:13px;color:var(--muted)}
+.bf-size p{grid-column:1/-1;margin:0}
+.linklike{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer;font:inherit;min-height:0}
+@media (max-width:520px){.bf-size{grid-template-columns:minmax(0,1fr)}}
 </style>
 </body></html>
