@@ -280,6 +280,12 @@ AI can add a reason to review; it never approves accounts, moves money or change
 the final call, and admins approve (or set `AUTOPILOT_AUTO_APPROVE=true` to approve owners whose every
 rule-based check passes). Without a key everything works on rules alone.
 
+## Hosting on Hostinger
+
+GYT runs on a Hostinger **VPS** with the database (PostgreSQL + PostGIS) on the same server, HTTPS by Caddy and
+nightly database backups: `docker-compose.hostinger.yml`, settings in `.env.hostinger.example`, steps in
+[docs/HOSTINGER.md](docs/HOSTINGER.md). Hostinger's Web and Cloud plans can't run it (MySQL only, no Python).
+
 ## Admins and rights
 
 * The **primary admin** is the first admin (`ADMIN_EMAIL`). It holds every right, and it can't be deleted,

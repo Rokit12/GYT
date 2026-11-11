@@ -1,0 +1,111 @@
+# GYT on a Hostinger VPS: database, API and website on one server, with HTTPS and nightly backups.
+#
+# The database (PostgreSQL 16 + PostGIS) runs on the VPS itself, in the `db` container, with its data on
+# the `pgdata` volume. Only the app can reach it: no database port is opened to the internet.
+#
+# Deploy with Hostinger's Docker Manager (VPS -> Docker Manager -> Compose -> from URL) using this file's
+# GitHub URL, or over SSH:  docker compose -f docker-compose.hostinger.yml --env-file .env up -d
+# The settings it needs are listed in .env.hostinger.example (set them in Docker Manager, or in .env).
+# The API and website images are built straight from the GitHub repository, so no files need copying.
+name: gyt
+
+x-api-env: &api-env
+  DATABASE_URL: postgresql+psycopg://gyt:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/gyt
+  JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (at least 32 characters)}
+  ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL (the primary admin)}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD}
+  ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+  BANK_DATA_KEY: ${BANK_DATA_KEY:?set BANK_DATA_KEY (64 hex characters)}
+  CORS_ORIGINS: https://${DOMAIN:?set DOMAIN}
+  PHOTO_STORAGE: db
+  AUTO_MIGRATE: "false"
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  AISSTREAM_API_KEY: ${AISSTREAM_API_KEY:-}
+  DIGITRAFFIC_ENABLED: ${DIGITRAFFIC_ENABLED:-false}
+  CHAIN_RPC: ${CHAIN_RPC:-}
+  ANCHOR_PRIVATE_KEY: ${ANCHOR_PRIVATE_KEY:-}
+  PROOF_REGISTRY_ADDRESS: ${PROOF_REGISTRY_ADDRESS:-}
+  YACHT_TWIN_ADDRESS: ${YACHT_TWIN_ADDRESS:-}
+  ARRIVAL_ESCROW_ADDRESS: ${ARRIVAL_ESCROW_ADDRESS:-}
+  IDENTITY_REGISTRY_ADDRESS: ${IDENTITY_REGISTRY_ADDRESS:-}
+  ANCHOR_INTERVAL_SECONDS: ${ANCHOR_INTERVAL_SECONDS:-0}
+  AUTOPILOT_INTERVAL_SECONDS: ${AUTOPILOT_INTERVAL_SECONDS:-300}
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: gyt
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: gyt
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gyt -d gyt"]
+      interval: 5s
+      retries: 20
+    restart: unless-stopped
+    # no `ports:` on purpose: the database is reachable only from the containers below
+
+  # every deploy: bring the schema up to date and make sure the primary admin exists, then exit
+  bootstrap:
+    build: { context: "https://github.com/Rokit12/GYT.git#main:api" }
+    image: gyt-api
+    environment: *api-env
+    command: ["python", "-m", "app.bootstrap"]
+    depends_on: { db: { condition: service_healthy } }
+    restart: "no"
+
+  api:
+    image: gyt-api
+    environment: *api-env
+    depends_on:
+      db: { condition: service_healthy }
+      bootstrap: { condition: service_completed_successfully }
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  web:
+    build: { context: "https://github.com/Rokit12/GYT.git#main:web" }
+    environment:
+      API_URL: http://api:8000
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+    depends_on: [api]
+    restart: unless-stopped
+
+  # HTTPS: Caddy gets and renews the certificate for DOMAIN by itself (the domain's A record must point here)
+  caddy:
+    image: caddy:2.8
+    command: ["caddy", "reverse-proxy", "--from", "${DOMAIN}", "--to", "web:3000"]
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes: [caddy_data:/data, caddy_config:/config]
+    depends_on: [web]
+    restart: unless-stopped
+
+  # nightly database backup to the `backups` volume, keeping the last 14
+  backup:
+    image: postgis/postgis:16-3.4
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes: [backups:/backups]
+    depends_on: { db: { condition: service_healthy } }
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        while true; do
+          f=/backups/gyt_$$(date +%Y%m%d_%H%M%S).dump
+          pg_dump -h db -U gyt -d gyt -Fc -f "$$f" && echo "backup: $$f" || echo "backup FAILED"
+          ls -1t /backups/gyt_*.dump 2>/dev/null | tail -n +15 | xargs -r rm -f
+          sleep 86400
+        done
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  backups:
+  caddy_data:
+  caddy_config:
