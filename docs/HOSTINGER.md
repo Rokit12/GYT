@@ -23,6 +23,18 @@ Everything is in `docker-compose.hostinger.yml`:
    an **A record** for `@` → VPS IP, and an **A record** for `www` → VPS IP (or a CNAME `www` → the domain).
    Leave any `MX` and `TXT` records alone: they carry email and verification. `www` redirects to the main address.
 
+## Quickest: one command
+
+In hPanel open the VPS's **Browser terminal** (or `ssh root@YOUR-VPS-IP`) and run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Rokit12/GYT/main/scripts/hostinger-setup.sh | bash -s -- your-domain.com
+```
+
+It installs Docker if needed, downloads GYT to `/opt/gyt`, generates every secret on the server, asks for the
+primary admin's email and password, starts everything and checks that the domain points at the VPS.
+Run the same command again to update. The manual steps below do the same thing by hand.
+
 ## 2. Set the settings
 
 Fill in the values listed in `.env.hostinger.example`. Generate each secret with `openssl rand -hex 32`
