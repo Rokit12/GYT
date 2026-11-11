@@ -19,7 +19,9 @@ Everything is in `docker-compose.hostinger.yml`:
 
 1. In hPanel buy or open a **VPS** (KVM 2 or bigger: 2 vCPU, 8 GB RAM is comfortable) and choose the
    **Docker** template under OS & Panel → Operating System. It installs Docker and Docker Manager.
-2. Point your domain's **A record** at the VPS IP address (Domains → DNS). Wait until it resolves.
+2. In the domain's DNS (hPanel → Domains → your domain → DNS / Nameservers), point both names at the VPS IP:
+   an **A record** for `@` → VPS IP, and an **A record** for `www` → VPS IP (or a CNAME `www` → the domain).
+   Leave any `MX` and `TXT` records alone: they carry email and verification. `www` redirects to the main address.
 
 ## 2. Set the settings
 

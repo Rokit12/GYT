@@ -77,10 +77,17 @@ services:
     depends_on: [api]
     restart: unless-stopped
 
-  # HTTPS: Caddy gets and renews the certificate for DOMAIN by itself (the domain's A record must point here)
+  # HTTPS: Caddy gets and renews the certificates by itself once DOMAIN (and www.DOMAIN) point at this VPS.
+  # www.DOMAIN redirects to DOMAIN.
   caddy:
     image: caddy:2.8
-    command: ["caddy", "reverse-proxy", "--from", "${DOMAIN}", "--to", "web:3000"]
+    environment:
+      DOMAIN: ${DOMAIN}
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        printf '%s\n' '{$$DOMAIN} {' '  encode zstd gzip' '  reverse_proxy web:3000' '}' 'www.{$$DOMAIN} {' '  redir https://{$$DOMAIN}{uri} permanent' '}' > /etc/caddy/Caddyfile
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
     ports: ["80:80", "443:443", "443:443/udp"]
     volumes: [caddy_data:/data, caddy_config:/config]
     depends_on: [web]
